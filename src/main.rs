@@ -1,3 +1,5 @@
+use colored::*;
+
 use rustyline::error::ReadlineError;
 use rustyline::{DefaultEditor, Result};
 
@@ -37,7 +39,7 @@ async fn main() {
     let pid = std::process::id();
 
     let mut rcon = rcon::RCONConnection::new(&args.address, args.port, pid as i32).await.unwrap();
-    rcon.auth("chocolatedog36").await.unwrap();
+    rcon.auth(&args.password).await.unwrap();
 
     if args.run.is_some() {
         match rcon.send_command(args.run.unwrap().trim()).await {
@@ -49,10 +51,18 @@ async fn main() {
 
     let mut rl = DefaultEditor::new().unwrap();
 
+    //This is literally a crime but its relatively unimportant.
+    println!("{} {}{}:{}{}", "Sucessfully connected to server".green().bold(), "(".green(), args.address.green(), args.port.to_string().green(), ")".green());
+
+    println!("CTRL+C or type Q to quit");
+
     loop {
         let readline = rl.readline(">> ");
         match readline {
             Ok(line) => {
+                if line == "Q" {
+                    std::process::exit(0)
+                }
                 let response = rcon.send_command(&line).await.unwrap();
                 println!("{}", response);
             },
@@ -60,12 +70,8 @@ async fn main() {
                 println!("CTRL-C");
                 break
             },
-            Err(ReadlineError::Eof) => {
-                println!("CTRL-D");
-                break
-            },
             Err(err) => {
-                println!("Error: {:?}", err);
+                println!("Rustyline error: {:?}", err);
                 break
             }
         }
