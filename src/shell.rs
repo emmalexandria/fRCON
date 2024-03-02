@@ -207,6 +207,7 @@ impl RCONShell<'_> {
         execute!(self.stdout, MoveToColumn(0), Clear(ClearType::CurrentLine))?;
         self.stdout.write(self.prompt_chars.as_bytes())?;
         self.stdout.write(command.as_bytes())?;
+        self.stdout.write(&[b'\n'])?;
 
         //If the response length is greater than 0 (to avoid empty lines)
         if response.len() > 0 {
