@@ -64,14 +64,20 @@ async fn main() {
     let mut rcon = rcon::RCONConnection::new(&args.address, args.port, pid as i32)
         .await
         .unwrap();
-    rcon.auth(&args.password).await.unwrap();
+    print_if_not_silent("Connected to RCON.".white(), &args);
+    match rcon.auth(&args.password).await {
+        Ok(_) => {
+            print_if_not_silent("Logged in.".white(), &args);
+        }
+        Err(e) => print_if_not_silent("Failed to log in.".red(), &args),
+    }
 
     if args.commands.len() > 0 {
-        for cmd in args.commands {
+        for cmd in &args.commands {
             match rcon.send_command(cmd.trim()).await {
                 Ok(s) => {
                     if args.silent == None {
-                        println!("{}", s)
+                        print_if_not_silent(s.as_str().white(), &args);
                     }
                 }
                 Err(e) => eprintln!("{}", e),
@@ -104,4 +110,10 @@ fn print_version() {
     println!("{}", v_string);
     println!("──────────────");
     println!("Licensed under MIT");
+}
+
+fn print_if_not_silent(output: StyledContent<&str>, args: &Args) {
+    if args.silent == None {
+        println!("{}", output);
+    }
 }
