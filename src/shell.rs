@@ -1,6 +1,8 @@
 use crossterm::cursor::{MoveLeft, MoveToColumn, SetCursorStyle};
 use crossterm::event::{poll, read, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use crossterm::style::{Color, SetForegroundColor};
+use crossterm::style::{
+    Attribute, Color, ContentStyle, ResetColor, SetAttribute, SetForegroundColor, SetStyle, Stylize,
+};
 use crossterm::terminal::Clear;
 use crossterm::{execute, terminal, terminal::ClearType};
 use std::io::{self, Write};
@@ -8,11 +10,13 @@ use std::time::Duration;
 
 use crate::rcon::RCONConnection;
 
+//Used to parse commands for this response, because the way it normally prints is very ugly
 const UNKNOWN_COMMAND_RESPONSE: &str = "Unknown or incomplete command, see below for error";
 
 pub struct RCONShell<'a> {
     conn: &'a mut RCONConnection,
     prompt_chars: String,
+    //Held reference to stdout to flush once per loop
     stdout: io::Stdout,
 
     //Used for generating a fancy little prelude to the prompt
@@ -57,7 +61,7 @@ impl RCONShell<'_> {
         }
 
         while self.poll_events().await? {
-            self.print()?;
+            self.print_prompt_line()?;
         }
         RCONShell::release();
         Ok(())
@@ -89,7 +93,7 @@ impl RCONShell<'_> {
         return Ok(true);
     }
 
-    ///Where all character based shell input is handled. Inherits the return type of poll_events to give it the ability to 
+    ///Where all character based shell input is handled. Inherits the return type of poll_events to give it the ability to
     ///arbitrarily cause the loop to exit
     async fn handle_char_events(&mut self, code: KeyCode) -> std::io::Result<bool> {
         match code {
@@ -110,23 +114,10 @@ impl RCONShell<'_> {
                 }
             }
             KeyCode::Up => {
-                if self.history_offset < self.history.len() {
-                    self.history_offset += 1;
-                    self.current_input =
-                        self.history[self.history.len() - self.history_offset].clone();
-                }
+                self.seek_up_history();
             }
             KeyCode::Down => {
-                if self.history_offset > 0 {
-                    self.history_offset -= 1;
-                }
-
-                if self.history_offset == 0 {
-                    self.current_input.clear();
-                } else {
-                    self.current_input =
-                        self.history[self.history.len() - self.history_offset].clone();
-                }
+                self.seek_down_history();
             }
             KeyCode::Enter => {
                 let res = self.conn.send_command(&self.current_input).await.unwrap();
@@ -151,8 +142,10 @@ impl RCONShell<'_> {
         Ok(true)
     }
 
+    /// Prints the current prompt and the current contents of user input. Should always be run after all other commands
+    /// that write to the shared reference to stdout.
     //Unfortunately requires mutability due to our held reference of stdout
-    fn print(&mut self) -> std::io::Result<()> {
+    fn print_prompt_line(&mut self) -> std::io::Result<()> {
         execute!(self.stdout, MoveToColumn(0))?;
         execute!(self.stdout, Clear(ClearType::CurrentLine))?;
 
@@ -184,32 +177,81 @@ impl RCONShell<'_> {
         return false;
     }
 
-    fn add_history_line(&mut self, command: String, response: String) -> std::io::Result<()> {
-        let mut parsed_response = response.clone();
-        let unknown_command: bool = RCONShell::parse_response_for_unknown_command(&response);
-        if unknown_command {
-            parsed_response = response[0..UNKNOWN_COMMAND_RESPONSE.len()].to_string()
-                + "\n"
-                + &response[UNKNOWN_COMMAND_RESPONSE.len()..];
+    //Theres a suprising amount of weirdness associated with seeking up and down the history, so these functions aren't as simple as you'd expect.
+    fn seek_up_history(&mut self) {
+        if self.history_offset < self.history.len() {
+            self.history_offset += 1;
+            //Seek from the end of the history, otherwise we'd get older items first
+            self.current_input = self.history[self.history.len() - self.history_offset].clone();
         }
+    }
+
+    fn seek_down_history(&mut self) {
+        //If we can subtract by 1, do so
+        if self.history_offset > 0 {
+            self.history_offset -= 1;
+        }
+
+        if self.history_offset == 0 {
+            self.current_input.clear();
+        } else {
+            //It might seem strange that this isn't done in self.history_offset > 0
+            //But that's because we could subtract one from the history offset and end up with it at 0
+            //In that case, we would be accessing the length of the vec (index out of bounds)
+            self.current_input = self.history[self.history.len() - self.history_offset].clone();
+        }
+    }
+
+    ///Adds a line to the history vec and prints it to the screen.
+    //There's a lot of ugliness in this function purely due to my desire to parse the unknown command response
+    //and print something nicer
+    fn add_history_line(&mut self, command: String, response: String) -> std::io::Result<()> {
+        let response_lines = RCONShell::get_styled_response(response.clone());
 
         execute!(self.stdout, MoveToColumn(0), Clear(ClearType::CurrentLine))?;
         self.stdout.write(self.prompt_chars.as_bytes())?;
         self.stdout.write(command.as_bytes())?;
+
+        //If the response length is greater than 0 (to avoid empty lines)
         if response.len() > 0 {
-            self.stdout.write(&[b'\n'])?;
-            if unknown_command {
-                execute!(self.stdout, SetForegroundColor(Color::Red))?;
+            //Go through the lines of the parsed response (either the response alone or the unknown command response styled)
+            for (line, style) in response_lines {
+                execute!(self.stdout, SetStyle(style))?;
+                self.stdout.write(&[b'\n'])?;
+                self.stdout.write(line.as_bytes())?;
+
+                //Reset the color (only necessary if it was an error)
+                execute!(
+                    self.stdout,
+                    ResetColor,
+                    SetAttribute(Attribute::NoBold),
+                    //For some ungodly reason, crossterm is applying what seems to be a random underline. Don't ask me.
+                    SetAttribute(Attribute::NoUnderline)
+                )?;
             }
-            self.stdout.write(parsed_response.as_bytes())?;
         }
         self.stdout.write(&[b'\n'])?;
-
-        execute!(self.stdout, SetForegroundColor(Color::White))?;
 
         self.history.push(command);
 
         Ok(())
+    }
+
+    ///If the reponse indicates the command is unknown or incomplete, this function returns
+    ///a multiline version of the response with content styles to make
+    ///the error clearer. Otherwise, it returns only the original response formatted in white
+    fn get_styled_response(response: String) -> Vec<(String, ContentStyle)> {
+        let mut response_lines = Vec::<(String, ContentStyle)>::new();
+
+        if RCONShell::parse_response_for_unknown_command(&response) {
+            let sections = response.split_at(UNKNOWN_COMMAND_RESPONSE.len());
+            response_lines.push((sections.0.to_string(), ContentStyle::new().red().bold()));
+            response_lines.push((sections.1.to_string(), ContentStyle::new().red()));
+        } else {
+            response_lines.push((response, ContentStyle::new().white()));
+        }
+
+        return response_lines;
     }
 
     ///To be used when an operation fails but its not a big deal
@@ -218,7 +260,9 @@ impl RCONShell<'_> {
     // Given that all this function does is write to the terminal in red, if we get an error, ignore it and print
     // a user friendly message, and then this function errors, something must be up.
     fn print_friendly_error(&mut self, output: &str) -> std::io::Result<()> {
+        self.stdout.write(&[b'\n'])?;
         execute!(self.stdout, SetForegroundColor(Color::Red))?;
+        self.stdout.write("[Shell] ".as_bytes())?;
         self.stdout.write(output.as_bytes())?;
         self.stdout.write(&[b'\n'])?;
 
