@@ -1,3 +1,5 @@
+use std::io;
+
 use colored::*;
 
 use rustyline::error::ReadlineError;
@@ -6,6 +8,7 @@ use rustyline::{DefaultEditor, Result};
 use argh::FromArgs;
 
 mod rcon;
+mod shell;
 
 
 #[derive(FromArgs)]
@@ -52,7 +55,7 @@ async fn main() {
     let mut rl = DefaultEditor::new().unwrap();
 
     //This is literally a crime but its relatively unimportant.
-    println!("{} {}{}:{}{}", "Sucessfully connected to server".green().bold(), "(".green(), args.address.green(), args.port.to_string().green(), ")".green());
+    println!("{} {}{}{}{}{}", "Sucessfully connected to server".green().bold(), "(".green(), args.address.green(), ":".green(), args.port.to_string().green(), ")".green());
 
     println!("CTRL+C or type Q to quit");
 
@@ -63,8 +66,21 @@ async fn main() {
                 if line == "Q" {
                     std::process::exit(0)
                 }
-                let response = rcon.send_command(&line).await.unwrap();
-                println!("{}", response);
+                let response = rcon.send_command(&line).await;
+                match response {
+                    Ok(s) => {
+                        if s.len() > 0 {
+                            println!("{}", s)
+                        }
+                    }, 
+                    Err(e) => {
+                        if e.kind() == io::ErrorKind::InvalidInput {
+                            println!("{} {}", "Input error:".red().bold(), e.to_string().red())
+                        }
+                    }
+
+                }
+
             },
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");

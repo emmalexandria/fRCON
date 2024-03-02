@@ -1,8 +1,9 @@
 use std::io;
 
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpStream};
-
-const DATA_BUF_SIZE: usize = 4096;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
+};
 
 #[derive(Debug)]
 enum RCONCommand {
@@ -25,36 +26,46 @@ impl RCONCommand {
     }
 
     pub fn from_i32(n: i32, is_response: bool) -> RCONCommand {
-      match n {
-          3 => RCONCommand::ServerAuth,
-          2 if is_response => RCONCommand::ServerAuthResponse,
-          2 => RCONCommand::ServerExec,
-          0 => RCONCommand::ServerResponseValue,
-          n => RCONCommand::Unknown(n),
-      }
-  }
+        match n {
+            3 => RCONCommand::ServerAuth,
+            2 if is_response => RCONCommand::ServerAuthResponse,
+            2 => RCONCommand::ServerExec,
+            0 => RCONCommand::ServerResponseValue,
+            n => RCONCommand::Unknown(n),
+        }
+    }
 }
 
 //defines the size of the data preceeding body in RCONPacket
 const PACKET_SIZE_CONST: i32 = 10;
 
+//max size of the body in bytes
+const MAX_BODY_SIZE: usize = 1446;
+
 #[derive(Debug)]
 struct RCONPacket {
-  length: i32,
-  id: i32,
-  command: RCONCommand,
-  body: String,
+    length: i32,
+    id: i32,
+    command: RCONCommand,
+    body: String,
 }
 
 impl RCONPacket {
-    pub fn new(id: i32, command: RCONCommand, body: String) -> RCONPacket {
-        //size: id: 4, command: 4, null terminator after command: 1, null terminator at end: 1
-        RCONPacket {
+    pub fn new(id: i32, command: RCONCommand, body: String) -> io::Result<RCONPacket> {
+        if body.len() > MAX_BODY_SIZE {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Command exceeds max size of body",
+            ));
+        }
+
+        //length = id: 4, command: 4, null terminator after command: 1, null terminator at end: 1
+        Ok(RCONPacket {
             length: PACKET_SIZE_CONST + body.len() as i32,
             id,
             command,
             body,
-        }
+        })
     }
 
     pub async fn serialize(&self, stream: &mut TcpStream) -> io::Result<()> {
@@ -87,21 +98,23 @@ impl RCONPacket {
         let body_length = length - PACKET_SIZE_CONST;
         let mut body_buffer = Vec::with_capacity(body_length as usize);
 
-        stream.take(body_length as u64)
-          .read_to_end(&mut body_buffer)
-          .await?;
+        stream
+            .take(body_length as u64)
+            .read_to_end(&mut body_buffer)
+            .await?;
 
-        let body = String::from_utf8(body_buffer).map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
+        let body = String::from_utf8(body_buffer)
+            .map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
 
         //buffer for terminating null pointers at the end of response
         let mut buf = [0u8; 2];
         stream.read_exact(&mut buf).await?;
 
         let packet = RCONPacket {
-          length,
-          id,
-          command: RCONCommand::from_i32(command, true),
-          body,
+            length,
+            id,
+            command: RCONCommand::from_i32(command, true),
+            body,
         };
 
         Ok(packet)
@@ -129,24 +142,27 @@ impl RCONConnection {
     }
 
     pub async fn auth(&mut self, password: &str) -> std::io::Result<()> {
-        let packet = RCONPacket::new(self.id, RCONCommand::ServerAuth, String::from(password));
+        //this should almost never panic, cleaner to just unwrap
+        let packet = RCONPacket::new(self.id, RCONCommand::ServerAuth, String::from(password))?;
         packet.serialize(&mut self.stream).await.unwrap();
 
         let response = RCONPacket::deserialize(&mut self.stream).await?;
         if response.id != self.id {
-          return Err(std::io::Error::new(std::io::ErrorKind::ConnectionRefused, "Failed to connect to Minecraft server"));
-        } 
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::ConnectionRefused,
+                "Failed to connect to Minecraft server",
+            ));
+        }
 
         Ok(())
     }
 
     pub async fn send_command(&mut self, command: &str) -> std::io::Result<String> {
-      let packet = RCONPacket::new(self.id, RCONCommand::ServerExec, String::from(command));
-      packet.serialize(&mut self.stream).await.unwrap();
+        let packet = RCONPacket::new(self.id, RCONCommand::ServerExec, String::from(command))?;
+        packet.serialize(&mut self.stream).await.unwrap();
 
-      let response = RCONPacket::deserialize(&mut self.stream).await?;
-      
-    
-      Ok(response.body)
+        let response = RCONPacket::deserialize(&mut self.stream).await?;
+
+        Ok(response.body)
     }
 }
