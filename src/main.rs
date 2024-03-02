@@ -96,7 +96,7 @@ async fn main() {
     match shell.run().await {
         Err(e) => {
             println!("Shell exited with error: {}", e);
-            std::process::exit(-1)
+            std::process::exit(1)
         }
         Ok(_) => {}
     }

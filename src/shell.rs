@@ -1,5 +1,6 @@
 use crossterm::cursor::{
-    self, MoveLeft, MoveToColumn, MoveUp, RestorePosition, SavePosition, SetCursorStyle,
+    self, MoveDown, MoveLeft, MoveToColumn, MoveToNextLine, MoveToPreviousLine, MoveUp,
+    RestorePosition, SavePosition, SetCursorStyle,
 };
 use crossterm::event::{poll, read, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::style::{
@@ -70,7 +71,7 @@ impl RCONShell<'_> {
             _ => {}
         }
         while self.poll_events().await? {
-            self.print_prompt_line()?;
+            self.print_prompt_lines()?;
         }
         RCONShell::release();
         Ok(())
@@ -164,19 +165,15 @@ impl RCONShell<'_> {
     /// Prints the current prompt and the current contents of user input. Should always be run after all other commands
     /// that write to the shared reference to stdout.
     //Unfortunately requires mutability due to our held reference of stdout
-    fn print_prompt_line(&mut self) -> std::io::Result<()> {
+    fn print_prompt_lines(&mut self) -> std::io::Result<()> {
         //check if wrapping is necessary
         let prompt_len = self.gen_prompt_addr().len() + self.prompt_chars.len();
         let output_len = prompt_len + self.current_input.len();
-
         let mut output_lines = Vec::<String>::new();
 
         if output_len > terminal::size()?.0.into() {
             output_lines = self.split_current_input(prompt_len)?;
-            execute!(
-                self.stdout,
-                MoveUp((output_lines.len() - 1).try_into().unwrap())
-            )?;
+            execute!(self.stdout, MoveUp((output_lines.len() - 1) as u16))?;
         } else {
             output_lines.push(self.current_input.clone());
         }
@@ -184,14 +181,10 @@ impl RCONShell<'_> {
         execute!(self.stdout, MoveToColumn(0))?;
         execute!(self.stdout, Clear(ClearType::FromCursorDown))?;
 
-        execute!(self.stdout, SetForegroundColor(Color::Green))?;
-        self.stdout.write(&self.gen_prompt_addr())?;
-
-        execute!(self.stdout, SetForegroundColor(Color::White))?;
-        self.stdout.write(self.prompt_chars.as_bytes())?;
+        self.print_prompt()?;
 
         for (i, line) in output_lines.iter().enumerate() {
-            if i > 0 {
+            if (i > 0) {
                 self.stdout.write(&[b'\n'])?;
             }
             self.stdout.write(line.as_bytes())?;
@@ -209,6 +202,16 @@ impl RCONShell<'_> {
         }
 
         //Save the last cursor position
+
+        Ok(())
+    }
+
+    fn print_prompt(&mut self) -> std::io::Result<()> {
+        execute!(self.stdout, SetForegroundColor(Color::Green))?;
+        self.stdout.write(&self.gen_prompt_addr())?;
+
+        execute!(self.stdout, SetForegroundColor(Color::White))?;
+        self.stdout.write(self.prompt_chars.as_bytes())?;
 
         Ok(())
     }
