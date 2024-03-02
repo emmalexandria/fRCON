@@ -11,8 +11,6 @@ use crossterm::{execute, terminal, terminal::ClearType};
 use std::io::{self, Write};
 use std::time::Duration;
 
-use copypasta::{ClipboardContext, ClipboardProvider};
-
 use crate::rcon::RCONConnection;
 
 //Used to parse commands for this response, because the way it normally prints is very ugly
@@ -29,7 +27,7 @@ pub struct RCONShell<'a> {
     port: u16,
 
     /// Current user input independent of what the terminal is printing
-    current_input: String,
+    curr_history_entry: String,
     /// Line history (used for ability to seek through past commands with arrows)
     history: Vec<String>,
     history_offset: usize,
@@ -46,45 +44,42 @@ impl RCONShell<'_> {
             conn,
             prompt_chars,
             stdout: io::stdout(),
-
             ip,
             port,
-            current_input: String::new(),
+
+            curr_history_entry: String::new(),
             history: Vec::<String>::new(),
             history_offset: 0,
         }
     }
 
     pub async fn run(&mut self) -> io::Result<()> {
-        //terminal::enable_raw_mode().unwrap();
         //Doesn't matter if this errors
-        match execute!(self.stdout, SetCursorStyle::SteadyBlock) {
+        match execute!(self.stdout, SetCursorStyle::SteadyBar) {
             _ => {}
         }
+        self.history.push(" ".to_string());
         self.blocking_loop().await?;
-        //RCONShell::release();
         Ok(())
     }
 
     async fn blocking_loop(&mut self) -> std::io::Result<()> {
-        let mut last_lines = 0;
+        self.poll_events().await?;
         loop {
-            self.poll_events().await?;
             let prompt_len = self.print_prompt()?;
 
             self.stdout.flush()?;
 
-            let mut line_buf = String::new();
-            io::stdin().read_line(&mut line_buf)?;
+            io::stdin().read_line(&mut self.curr_history_entry)?;
 
-            let line = line_buf.trim().to_string();
-            last_lines = self.split_input(prompt_len, line.clone())?;
+            let line = self.curr_history_entry.trim().to_string();
+            let last_lines = self.split_input(prompt_len, line.clone())?;
 
             execute!(self.stdout, MoveUp((last_lines) as u16))?;
             execute!(self.stdout, Clear(ClearType::FromCursorDown))?;
 
             let res = self.conn.send_command(&line).await?;
-            self.add_history_line(line_buf, res)?;
+            self.add_history_line(self.curr_history_entry.clone(), res)?;
         }
 
         Ok(())
@@ -187,7 +182,8 @@ impl RCONShell<'_> {
         if self.history_offset < self.history.len() {
             self.history_offset += 1;
             //Seek from the end of the history, otherwise we'd get older items first
-            self.current_input = self.history[self.history.len() - self.history_offset].clone();
+            self.curr_history_entry =
+                self.history[self.history.len() - self.history_offset].clone();
         }
     }
 
@@ -197,14 +193,7 @@ impl RCONShell<'_> {
             self.history_offset -= 1;
         }
 
-        if self.history_offset == 0 {
-            self.current_input.clear();
-        } else {
-            //It might seem strange that this isn't done in self.history_offset > 0
-            //But that's because we could subtract one from the history offset and end up with it at 0
-            //In that case, we would be accessing the length of the vec (index out of bounds)
-            self.current_input = self.history[self.history.len() - self.history_offset].clone();
-        }
+        self.curr_history_entry = self.history[self.history.len() - self.history_offset].clone();
     }
 
     ///Adds a line to the history vec and prints it to the screen.
@@ -220,8 +209,8 @@ impl RCONShell<'_> {
         //If the response length is greater than 0 (to avoid empty lines)
         if response.len() > 0 {
             //Go through the lines of the parsed response (either the response alone or the unknown command response styled)
-            for (i, (line, style)) in response_lines.iter().enumerate() {
-                execute!(self.stdout, SetStyle(*style))?;
+            for (line, style) in response_lines {
+                execute!(self.stdout, SetStyle(style))?;
 
                 self.stdout.write(line.as_bytes())?;
                 self.stdout.write(&[b'\n'])?;
