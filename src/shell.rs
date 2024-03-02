@@ -88,7 +88,7 @@ impl RCONShell<'_> {
 
             let line = line_buf.trim().to_string();
 
-            last_lines = self.split_input(last_lines, line.clone())?.len();
+            last_lines = self.split_input(last_lines, line.clone())?;
 
             execute!(self.stdout, MoveUp((last_lines) as u16))?;
             execute!(self.stdout, Clear(ClearType::FromCursorDown))?;
@@ -141,34 +141,33 @@ impl RCONShell<'_> {
         Ok(())
     }
 
-    fn split_input(&self, prompt_len: usize, line: String) -> std::io::Result<Vec<String>> {
+    //returns the number of lines that a given input would be split over if printed next to the prompt
+    fn split_input(&self, prompt_len: usize, line: String) -> std::io::Result<usize> {
         let term_width = terminal::size()?.0;
 
-        let mut curr_input_lines = Vec::<String>::new();
-
         if line.len() < term_width as usize - prompt_len {
-            curr_input_lines.push(line);
-            return Ok(curr_input_lines);
+            return Ok(1);
         }
 
+        let mut line_count: usize = 1;
         let mut input = line.clone();
 
         let first_line_index: usize = term_width as usize - prompt_len;
 
-        curr_input_lines.push(String::from(input.split_at((first_line_index).into()).0));
+        line_count += 1;
         input.replace_range(0..first_line_index as usize, "");
 
         while input.len() > 0 {
             if input.len() >= term_width.into() {
-                curr_input_lines.push(String::from(input.split_at((term_width) as usize).0));
+                line_count += 1;
                 input.replace_range(0..(term_width) as usize, "");
             } else {
-                curr_input_lines.push(input);
+                line_count += 1;
                 break;
             }
         }
 
-        return Ok(curr_input_lines);
+        return Ok(line_count);
     }
 
     fn print_prompt(&mut self) -> std::io::Result<usize> {
