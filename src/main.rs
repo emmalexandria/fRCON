@@ -1,6 +1,4 @@
-use std::{io, thread::sleep, time::Duration};
-
-use colored::*;
+use std::{thread::sleep, time::Duration};
 
 use argh::FromArgs;
 use shell::RCONShell;
