@@ -58,7 +58,7 @@ impl RCONShell<'_> {
         match execute!(self.stdout, SetCursorStyle::SteadyBar) {
             _ => {}
         }
-        self.history.push(" ".to_string());
+        self.history.push(String::from(""));
         self.blocking_loop().await?;
         Ok(())
     }
@@ -73,13 +73,14 @@ impl RCONShell<'_> {
             io::stdin().read_line(&mut self.curr_history_entry)?;
 
             let line = self.curr_history_entry.trim().to_string();
+            self.curr_history_entry.clear();
             let last_lines = self.split_input(prompt_len, line.clone())?;
 
             execute!(self.stdout, MoveUp((last_lines) as u16))?;
             execute!(self.stdout, Clear(ClearType::FromCursorDown))?;
 
             let res = self.conn.send_command(&line).await?;
-            self.add_history_line(self.curr_history_entry.clone(), res)?;
+            self.add_history_line(line, res)?;
         }
 
         Ok(())
@@ -191,9 +192,10 @@ impl RCONShell<'_> {
         //If we can subtract by 1, do so
         if self.history_offset > 0 {
             self.history_offset -= 1;
-        }
 
-        self.curr_history_entry = self.history[self.history.len() - self.history_offset].clone();
+            self.curr_history_entry =
+                self.history[self.history.len() - self.history_offset].clone();
+        }
     }
 
     ///Adds a line to the history vec and prints it to the screen.
