@@ -63,5 +63,12 @@ async fn main() {
 
     let mut shell = RCONShell::new(&mut rcon, String::from(">>"), args.address, args.port);
 
-    shell.run().await;
+    
+    match shell.run().await {
+        Err(e) => {
+            println!("Shell exited with error: {}", e);
+            std::process::exit(-1)
+        }
+        Ok(_) => {}
+    }
 }
