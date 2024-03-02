@@ -33,12 +33,6 @@ pub struct RCONShell<'a> {
     /// Line history (used for ability to seek through past commands with arrows)
     history: Vec<String>,
     history_offset: usize,
-    /// Stores the negative offset of the cursor from the end of current_input for the purpose of line editing
-    cursor_offset: u16,
-
-    last_input_len: usize,
-
-    clipboard_ctx: ClipboardContext,
 }
 
 impl RCONShell<'_> {
@@ -57,10 +51,7 @@ impl RCONShell<'_> {
             port,
             current_input: String::new(),
             history: Vec::<String>::new(),
-            cursor_offset: 0,
             history_offset: 0,
-            last_input_len: 0,
-            clipboard_ctx: ClipboardContext::new().unwrap(),
         }
     }
 
@@ -87,8 +78,7 @@ impl RCONShell<'_> {
             io::stdin().read_line(&mut line_buf)?;
 
             let line = line_buf.trim().to_string();
-
-            last_lines = self.split_input(last_lines, line.clone())?;
+            last_lines = self.split_input(prompt_len, line.clone())?;
 
             execute!(self.stdout, MoveUp((last_lines) as u16))?;
             execute!(self.stdout, Clear(ClearType::FromCursorDown))?;
@@ -123,7 +113,7 @@ impl RCONShell<'_> {
             }
         }
 
-        return Ok(());
+        Ok(())
     }
 
     ///Where all character based shell input is handled. Inherits the return type of poll_events to give it the ability to
@@ -149,7 +139,7 @@ impl RCONShell<'_> {
             return Ok(1);
         }
 
-        let mut line_count: usize = 1;
+        let mut line_count: usize = 0;
         let mut input = line.clone();
 
         let first_line_index: usize = term_width as usize - prompt_len;
