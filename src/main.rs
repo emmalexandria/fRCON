@@ -69,7 +69,7 @@ async fn main() {
         Ok(_) => {
             print_if_not_silent("Logged in.".white(), &args);
         }
-        Err(e) => print_if_not_silent("Failed to log in.".red(), &args),
+        Err(_) => print_if_not_silent("Failed to log in.".red(), &args),
     }
 
     if args.commands.len() > 0 {

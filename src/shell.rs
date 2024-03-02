@@ -1,7 +1,4 @@
-use crossterm::cursor::{
-    self, MoveDown, MoveLeft, MoveToColumn, MoveToNextLine, MoveToPreviousLine, MoveUp,
-    RestorePosition, SavePosition, SetCursorStyle,
-};
+use crossterm::cursor::{MoveToColumn, MoveUp, SetCursorStyle};
 use crossterm::event::{poll, read, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::style::{
     Attribute, Color, ContentStyle, ResetColor, SetAttribute, SetForegroundColor, SetStyle, Stylize,
@@ -58,14 +55,17 @@ impl RCONShell<'_> {
         match execute!(self.stdout, SetCursorStyle::SteadyBar) {
             _ => {}
         }
-        self.history.push(String::from(""));
-        self.blocking_loop().await?;
+        self.shell_loop().await?;
         Ok(())
     }
 
-    async fn blocking_loop(&mut self) -> std::io::Result<()> {
-        self.poll_events().await?;
+    async fn shell_loop(&mut self) -> std::io::Result<()> {
         loop {
+            if !self.poll_events().await? {
+                println!("CTRL+C");
+                break;
+            }
+
             let prompt_len = self.print_prompt()?;
 
             self.stdout.flush()?;
@@ -81,13 +81,15 @@ impl RCONShell<'_> {
 
             let res = self.conn.send_command(&line).await?;
             self.add_history_line(line, res)?;
+
+            self.stdout.flush()?;
         }
 
         Ok(())
     }
 
     //enter the shell's loop, returns false if the loop should exit
-    async fn poll_events(&mut self) -> std::io::Result<()> {
+    async fn poll_events(&mut self) -> std::io::Result<bool> {
         if poll(Duration::from_millis(50)).is_ok() {
             let event = read().unwrap();
 
@@ -97,24 +99,24 @@ impl RCONShell<'_> {
                     kind: KeyEventKind::Press,
                     modifiers: KeyModifiers::NONE,
                     ..
-                }) => return self.handle_char_events(code).await,
+                }) => return self.handle_char_events(code),
                 Event::Key(KeyEvent {
                     code: KeyCode::Char('c'),
                     modifiers: KeyModifiers::CONTROL,
                     ..
                 }) => {
-                    return Ok(());
+                    return Ok(false);
                 }
                 _ => {}
             }
         }
 
-        Ok(())
+        Ok(true)
     }
 
     ///Where all character based shell input is handled. Inherits the return type of poll_events to give it the ability to
     ///arbitrarily cause the loop to exit
-    async fn handle_char_events(&mut self, code: KeyCode) -> std::io::Result<()> {
+    fn handle_char_events(&mut self, code: KeyCode) -> std::io::Result<bool> {
         match code {
             KeyCode::Up => {
                 self.seek_up_history();
@@ -124,7 +126,7 @@ impl RCONShell<'_> {
             }
             _ => {}
         }
-        Ok(())
+        Ok(true)
     }
 
     //returns the number of lines that a given input would be split over if printed next to the prompt
@@ -193,6 +195,10 @@ impl RCONShell<'_> {
         if self.history_offset > 0 {
             self.history_offset -= 1;
 
+            if self.history_offset == 0 {
+                self.curr_history_entry = String::new();
+            }
+
             self.curr_history_entry =
                 self.history[self.history.len() - self.history_offset].clone();
         }
@@ -252,29 +258,9 @@ impl RCONShell<'_> {
         return response_lines;
     }
 
-    ///To be used when an operation fails but its not a big deal
-    ///If this fails, assume something is wrong with our ability to print and panic
-    // Panic because the majority of our potential ignorable errors are generated from terminal interactions
-    // Given that all this function does is write to the terminal in red, if we get an error, ignore it and print
-    // a user friendly message, and then this function errors, something must be up.
-    fn print_friendly_error(&mut self, output: &str) -> std::io::Result<()> {
-        self.stdout.write(&[b'\n'])?;
-        execute!(self.stdout, SetForegroundColor(Color::Red))?;
-        self.stdout.write("[Shell] ".as_bytes())?;
-        self.stdout.write(output.as_bytes())?;
-        self.stdout.write(&[b'\n'])?;
-
-        Ok(())
-    }
-
     fn gen_prompt_addr(&self) -> Vec<u8> {
         let prompt_string =
             String::from("[".to_owned() + &self.ip + ":" + self.port.to_string().as_str() + "] ");
         return prompt_string.as_bytes().to_vec();
-    }
-
-    ///Releases the terminal from raw mode. Should be called at the end of the application.
-    pub fn release() {
-        terminal::disable_raw_mode().unwrap();
     }
 }
