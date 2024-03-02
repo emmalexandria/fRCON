@@ -1,3 +1,4 @@
+use crossterm::style::{ContentStyle, StyledContent, Stylize};
 use std::{thread::sleep, time::Duration};
 
 use argh::FromArgs;
@@ -6,35 +7,57 @@ use shell::RCONShell;
 mod rcon;
 mod shell;
 
+const VERSION: &str = "0.1.0";
+
 #[derive(FromArgs)]
 #[argh(description = "Minecraft RCON Implementation for Rust")]
 struct Args {
-    #[argh(option, description = "IPv4 address of the server")]
+    #[argh(option, description = "address of the server", short = 'a')]
     address: String,
 
-    #[argh(option, description = "RCON port of the server", default = "25575")]
+    #[argh(
+        option,
+        description = "RCON port of the server",
+        default = "25575",
+        short = 'p'
+    )]
     port: u16,
 
-    #[argh(option, description = "RCON password for the server")]
+    #[argh(option, description = "RCON password", short = 'P')]
     password: String,
 
     #[argh(
         positional,
-        description = "if passed, commands will be executed and shell mode will not be entered"
+        description = "will be executed and shell mode will not be entered"
     )]
     commands: Vec<String>,
 
-    #[argh(option, description = "seconds to wait between each passed command")]
+    #[argh(
+        option,
+        description = "seconds to wait between each passed command",
+        short = 'w'
+    )]
     wait: Option<u64>,
+
+    #[argh(
+        switch,
+        description = "disables output printing for passed commands",
+        short = 's'
+    )]
+    silent: Option<bool>,
+
+    #[argh(switch, description = "prints version information", short = 'v')]
+    version: Option<bool>,
 }
-
-//RCON packet IDs
-
-//RCON packet
 
 #[tokio::main]
 async fn main() {
     let args: Args = argh::from_env();
+
+    if args.version == Some(true) {
+        print_version();
+        std::process::exit(0);
+    }
 
     let pid = std::process::id();
 
@@ -46,7 +69,11 @@ async fn main() {
     if args.commands.len() > 0 {
         for cmd in args.commands {
             match rcon.send_command(cmd.trim()).await {
-                Ok(s) => println!("{}", s),
+                Ok(s) => {
+                    if args.silent == None {
+                        println!("{}", s)
+                    }
+                }
                 Err(e) => eprintln!("{}", e),
             }
 
@@ -67,4 +94,14 @@ async fn main() {
         }
         Ok(_) => {}
     }
+}
+
+fn print_version() {
+    let v_string = StyledContent::new(
+        ContentStyle::new().bold(),
+        "mcrscon v".to_string() + VERSION,
+    );
+    println!("{}", v_string);
+    println!("──────────────");
+    println!("Licensed under MIT");
 }
