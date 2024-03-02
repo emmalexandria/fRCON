@@ -1,11 +1,9 @@
-use std::io;
+use std::{io, thread::sleep, time::Duration};
 
 use colored::*;
 
-use rustyline::error::ReadlineError;
-use rustyline::{DefaultEditor, Result};
-
 use argh::FromArgs;
+use shell::RCONShell;
 
 mod rcon;
 mod shell;
@@ -23,8 +21,11 @@ struct Args {
     #[argh(option, description="RCON password for the server")]
     password: String,
 
-    #[argh(option, description="when passed, the given command will be ran and no interactive shell will be entered")]
-    run: Option<String>
+    #[argh(positional, description="if passed, commands will be executed and shell mode will not be entered")]
+    commands: Vec<String>,
+
+    #[argh(option, description="seconds to wait between each passed command")]
+    wait: Option<u64>,
 }
 
 
@@ -44,52 +45,25 @@ async fn main() {
     let mut rcon = rcon::RCONConnection::new(&args.address, args.port, pid as i32).await.unwrap();
     rcon.auth(&args.password).await.unwrap();
 
-    if args.run.is_some() {
-        match rcon.send_command(args.run.unwrap().trim()).await {
-            Ok(s) => println!("{}", s),
-            Err(e) => eprintln!("{}", e)
+
+
+    if args.commands.len() > 0 {
+        for cmd in args.commands {
+            match rcon.send_command(cmd.trim()).await {
+                Ok(s) => println!("{}", s),
+                Err(e) => eprintln!("{}", e)
+            }
+
+            if args.wait.is_some() {
+                sleep(Duration::from_secs(args.wait.unwrap()))
+            }
+
         }
+        
         std::process::exit(0);
     }
 
-    let mut rl = DefaultEditor::new().unwrap();
+    let mut shell = RCONShell::new(&mut rcon, String::from("/"), args.address, args.port);
 
-    //This is literally a crime but its relatively unimportant.
-    println!("{} {}{}{}{}{}", "Sucessfully connected to server".green().bold(), "(".green(), args.address.green(), ":".green(), args.port.to_string().green(), ")".green());
-
-    println!("CTRL+C or type Q to quit");
-
-    loop {
-        let readline = rl.readline(">> ");
-        match readline {
-            Ok(line) => {
-                if line == "Q" {
-                    std::process::exit(0)
-                }
-                let response = rcon.send_command(&line).await;
-                match response {
-                    Ok(s) => {
-                        if s.len() > 0 {
-                            println!("{}", s)
-                        }
-                    }, 
-                    Err(e) => {
-                        if e.kind() == io::ErrorKind::InvalidInput {
-                            println!("{} {}", "Input error:".red().bold(), e.to_string().red())
-                        }
-                    }
-
-                }
-
-            },
-            Err(ReadlineError::Interrupted) => {
-                println!("CTRL-C");
-                break
-            },
-            Err(err) => {
-                println!("Rustyline error: {:?}", err);
-                break
-            }
-        }
-    }
+    shell.run().await;
 }
