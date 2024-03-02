@@ -1,4 +1,6 @@
-use crossterm::cursor::{self, MoveLeft, MoveToColumn, MoveUp, SetCursorStyle};
+use crossterm::cursor::{
+    self, MoveLeft, MoveToColumn, MoveUp, RestorePosition, SavePosition, SetCursorStyle,
+};
 use crossterm::event::{poll, read, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::style::{
     Attribute, Color, ContentStyle, ResetColor, SetAttribute, SetForegroundColor, SetStyle, Stylize,
@@ -7,6 +9,8 @@ use crossterm::terminal::Clear;
 use crossterm::{execute, terminal, terminal::ClearType};
 use std::io::{self, Write};
 use std::time::Duration;
+
+use copypasta::{ClipboardContext, ClipboardProvider};
 
 use crate::rcon::RCONConnection;
 
@@ -30,6 +34,10 @@ pub struct RCONShell<'a> {
     history_offset: usize,
     /// Stores the negative offset of the cursor from the end of current_input for the purpose of line editing
     cursor_offset: u16,
+
+    last_input_len: usize,
+
+    clipboard_ctx: ClipboardContext,
 }
 
 impl RCONShell<'_> {
@@ -39,7 +47,6 @@ impl RCONShell<'_> {
         ip: String,
         port: u16,
     ) -> RCONShell {
-        terminal::enable_raw_mode().unwrap();
         RCONShell {
             conn,
             prompt_chars,
@@ -51,15 +58,17 @@ impl RCONShell<'_> {
             history: Vec::<String>::new(),
             cursor_offset: 0,
             history_offset: 0,
+            last_input_len: 0,
+            clipboard_ctx: ClipboardContext::new().unwrap(),
         }
     }
 
     pub async fn run(&mut self) -> io::Result<()> {
+        terminal::enable_raw_mode().unwrap();
         //Doesn't matter if this errors
-        match execute!(self.stdout, SetCursorStyle::SteadyBar) {
+        match execute!(self.stdout, SetCursorStyle::SteadyBlock) {
             _ => {}
         }
-
         while self.poll_events().await? {
             self.print_prompt_line()?;
         }
@@ -76,6 +85,7 @@ impl RCONShell<'_> {
                 Event::Key(KeyEvent {
                     code,
                     kind: KeyEventKind::Press,
+                    modifiers: KeyModifiers::NONE,
                     ..
                 }) => return self.handle_char_events(code).await,
                 Event::Key(KeyEvent {
@@ -84,6 +94,15 @@ impl RCONShell<'_> {
                     ..
                 }) => {
                     return Ok(false);
+                }
+                Event::Key(KeyEvent {
+                    code: KeyCode::Char('v'),
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    ..
+                }) => {
+                    let content = self.clipboard_ctx.get_contents().unwrap();
+                    self.current_input.push_str(&content);
                 }
 
                 _ => {}
@@ -178,13 +197,18 @@ impl RCONShell<'_> {
             self.stdout.write(line.as_bytes())?;
         }
 
-        let mut line_width = cursor::position()?.0;
         //must check if greater than 0, because MoveLeft(0) still moves left one
         if self.cursor_offset > 0 {
             self.position_cursor_multiline()?;
         }
 
         self.stdout.flush()?;
+
+        if self.current_input.len() != self.last_input_len {
+            self.last_input_len = self.current_input.len();
+        }
+
+        //Save the last cursor position
 
         Ok(())
     }
@@ -210,8 +234,8 @@ impl RCONShell<'_> {
 
         while input.len() > 0 {
             if input.len() >= term_width.into() {
-                curr_input_lines.push(String::from(input.split_at((term_width - 1) as usize).0));
-                input.replace_range(0..(term_width - 1) as usize, "");
+                curr_input_lines.push(String::from(input.split_at((term_width) as usize).0));
+                input.replace_range(0..(term_width) as usize, "");
             } else {
                 curr_input_lines.push(input);
                 break;
