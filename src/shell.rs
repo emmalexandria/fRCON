@@ -1,4 +1,4 @@
-use crossterm::cursor::{MoveLeft, MoveToColumn, SetCursorStyle};
+use crossterm::cursor::{self, MoveLeft, MoveToColumn, MoveUp, SetCursorStyle};
 use crossterm::event::{poll, read, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::style::{
     Attribute, Color, ContentStyle, ResetColor, SetAttribute, SetForegroundColor, SetStyle, Stylize,
@@ -146,8 +146,24 @@ impl RCONShell<'_> {
     /// that write to the shared reference to stdout.
     //Unfortunately requires mutability due to our held reference of stdout
     fn print_prompt_line(&mut self) -> std::io::Result<()> {
+        //check if wrapping is necessary
+        let prompt_len = self.gen_prompt_addr().len() + self.prompt_chars.len();
+        let output_len = prompt_len + self.current_input.len();
+
+        let mut output_lines = Vec::<String>::new();
+
+        if output_len > terminal::size()?.0.into() {
+            output_lines = self.split_current_input(prompt_len)?;
+            execute!(
+                self.stdout,
+                MoveUp((output_lines.len() - 1).try_into().unwrap())
+            )?;
+        } else {
+            output_lines.push(self.current_input.clone());
+        }
+
         execute!(self.stdout, MoveToColumn(0))?;
-        execute!(self.stdout, Clear(ClearType::CurrentLine))?;
+        execute!(self.stdout, Clear(ClearType::FromCursorDown))?;
 
         execute!(self.stdout, SetForegroundColor(Color::Green))?;
         self.stdout.write(&self.gen_prompt_addr())?;
@@ -155,16 +171,54 @@ impl RCONShell<'_> {
         execute!(self.stdout, SetForegroundColor(Color::White))?;
         self.stdout.write(self.prompt_chars.as_bytes())?;
 
-        self.stdout.write(self.current_input.as_bytes())?;
+        for (i, line) in output_lines.iter().enumerate() {
+            if i > 0 {
+                self.stdout.write(&[b'\n'])?;
+            }
+            self.stdout.write(line.as_bytes())?;
+        }
 
+        let mut line_width = cursor::position()?.0;
         //must check if greater than 0, because MoveLeft(0) still moves left one
         if self.cursor_offset > 0 {
-            execute!(self.stdout, MoveLeft(self.cursor_offset))?;
+            self.position_cursor_multiline()?;
         }
 
         self.stdout.flush()?;
 
         Ok(())
+    }
+
+    fn position_cursor_multiline(&mut self) -> std::io::Result<()> {
+        if self.cursor_offset < cursor::position()?.0 {
+            execute!(self.stdout, MoveLeft(self.cursor_offset))?;
+        }
+
+        Ok(())
+    }
+
+    fn split_current_input(&self, prompt_len: usize) -> std::io::Result<Vec<String>> {
+        let term_width = terminal::size()?.0;
+
+        let mut curr_input_lines = Vec::<String>::new();
+        let mut input = self.current_input.clone();
+
+        let first_line_index: usize = term_width as usize - prompt_len;
+
+        curr_input_lines.push(String::from(input.split_at((first_line_index).into()).0));
+        input.replace_range(0..first_line_index as usize, "");
+
+        while input.len() > 0 {
+            if input.len() >= term_width.into() {
+                curr_input_lines.push(String::from(input.split_at((term_width - 1) as usize).0));
+                input.replace_range(0..(term_width - 1) as usize, "");
+            } else {
+                curr_input_lines.push(input);
+                break;
+            }
+        }
+
+        return Ok(curr_input_lines);
     }
 
     fn parse_response_for_unknown_command(response: &str) -> bool {
