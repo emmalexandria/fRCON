@@ -65,20 +65,43 @@ impl RCONShell<'_> {
     }
 
     pub async fn run(&mut self) -> io::Result<()> {
-        terminal::enable_raw_mode().unwrap();
+        //terminal::enable_raw_mode().unwrap();
         //Doesn't matter if this errors
         match execute!(self.stdout, SetCursorStyle::SteadyBlock) {
             _ => {}
         }
-        while self.poll_events().await? {
-            self.print_prompt_lines()?;
+        self.blocking_loop().await?;
+        //RCONShell::release();
+        Ok(())
+    }
+
+    async fn blocking_loop(&mut self) -> std::io::Result<()> {
+        let mut last_lines = 0;
+        loop {
+            self.poll_events().await?;
+            let prompt_len = self.print_prompt()?;
+
+            self.stdout.flush()?;
+
+            let mut line_buf = String::new();
+            io::stdin().read_line(&mut line_buf)?;
+
+            let line = line_buf.trim().to_string();
+
+            last_lines = self.split_input(last_lines, line.clone())?.len();
+
+            execute!(self.stdout, MoveUp((last_lines) as u16))?;
+            execute!(self.stdout, Clear(ClearType::FromCursorDown))?;
+
+            let res = self.conn.send_command(&line).await?;
+            self.add_history_line(line_buf, res)?;
         }
-        RCONShell::release();
+
         Ok(())
     }
 
     //enter the shell's loop, returns false if the loop should exit
-    async fn poll_events(&mut self) -> std::io::Result<bool> {
+    async fn poll_events(&mut self) -> std::io::Result<()> {
         if poll(Duration::from_millis(50)).is_ok() {
             let event = read().unwrap();
 
@@ -94,141 +117,41 @@ impl RCONShell<'_> {
                     modifiers: KeyModifiers::CONTROL,
                     ..
                 }) => {
-                    return Ok(false);
+                    return Ok(());
                 }
-                Event::Key(KeyEvent {
-                    code: KeyCode::Char('v'),
-                    modifiers: KeyModifiers::CONTROL,
-                    kind: KeyEventKind::Press,
-                    ..
-                }) => {
-                    let content = self.clipboard_ctx.get_contents().unwrap();
-                    self.current_input.push_str(&content);
-                }
-
                 _ => {}
             }
         }
 
-        return Ok(true);
+        return Ok(());
     }
 
     ///Where all character based shell input is handled. Inherits the return type of poll_events to give it the ability to
     ///arbitrarily cause the loop to exit
-    async fn handle_char_events(&mut self, code: KeyCode) -> std::io::Result<bool> {
+    async fn handle_char_events(&mut self, code: KeyCode) -> std::io::Result<()> {
         match code {
-            KeyCode::Char(c) => {
-                self.current_input.push(c);
-            }
-            KeyCode::Backspace => {
-                self.current_input.pop();
-            }
-            KeyCode::Left => {
-                if usize::from(self.cursor_offset) < self.current_input.len() {
-                    self.cursor_offset += 1;
-                }
-            }
-            KeyCode::Right => {
-                if self.cursor_offset > 0 {
-                    self.cursor_offset -= 1;
-                }
-            }
             KeyCode::Up => {
                 self.seek_up_history();
             }
             KeyCode::Down => {
                 self.seek_down_history();
             }
-            KeyCode::Enter => {
-                let res = self.conn.send_command(&self.current_input).await.unwrap();
-                match self.add_history_line(self.current_input.clone(), res) {
-                    Ok(_) => {}
-                    Err(_) => {
-                        if self
-                            .print_friendly_error("Failed to add line to history")
-                            .is_err()
-                        {
-                            //The decision to exit the shell if this function fails is explained above its definition.
-                            //Someone tell me if its a stupid decision
-                            return Ok(false);
-                        }
-                    }
-                }
-                self.cursor_offset = 0;
-                self.current_input.clear();
-            }
             _ => {}
         }
-        Ok(true)
-    }
-
-    /// Prints the current prompt and the current contents of user input. Should always be run after all other commands
-    /// that write to the shared reference to stdout.
-    //Unfortunately requires mutability due to our held reference of stdout
-    fn print_prompt_lines(&mut self) -> std::io::Result<()> {
-        //check if wrapping is necessary
-        let prompt_len = self.gen_prompt_addr().len() + self.prompt_chars.len();
-        let output_len = prompt_len + self.current_input.len();
-        let mut output_lines = Vec::<String>::new();
-
-        if output_len > terminal::size()?.0.into() {
-            output_lines = self.split_current_input(prompt_len)?;
-            execute!(self.stdout, MoveUp((output_lines.len() - 1) as u16))?;
-        } else {
-            output_lines.push(self.current_input.clone());
-        }
-
-        execute!(self.stdout, MoveToColumn(0))?;
-        execute!(self.stdout, Clear(ClearType::FromCursorDown))?;
-
-        self.print_prompt()?;
-
-        for (i, line) in output_lines.iter().enumerate() {
-            if (i > 0) {
-                self.stdout.write(&[b'\n'])?;
-            }
-            self.stdout.write(line.as_bytes())?;
-        }
-
-        //must check if greater than 0, because MoveLeft(0) still moves left one
-        if self.cursor_offset > 0 {
-            self.position_cursor_multiline()?;
-        }
-
-        self.stdout.flush()?;
-
-        if self.current_input.len() != self.last_input_len {
-            self.last_input_len = self.current_input.len();
-        }
-
-        //Save the last cursor position
-
         Ok(())
     }
 
-    fn print_prompt(&mut self) -> std::io::Result<()> {
-        execute!(self.stdout, SetForegroundColor(Color::Green))?;
-        self.stdout.write(&self.gen_prompt_addr())?;
-
-        execute!(self.stdout, SetForegroundColor(Color::White))?;
-        self.stdout.write(self.prompt_chars.as_bytes())?;
-
-        Ok(())
-    }
-
-    fn position_cursor_multiline(&mut self) -> std::io::Result<()> {
-        if self.cursor_offset < cursor::position()?.0 {
-            execute!(self.stdout, MoveLeft(self.cursor_offset))?;
-        }
-
-        Ok(())
-    }
-
-    fn split_current_input(&self, prompt_len: usize) -> std::io::Result<Vec<String>> {
+    fn split_input(&self, prompt_len: usize, line: String) -> std::io::Result<Vec<String>> {
         let term_width = terminal::size()?.0;
 
         let mut curr_input_lines = Vec::<String>::new();
-        let mut input = self.current_input.clone();
+
+        if line.len() < term_width as usize - prompt_len {
+            curr_input_lines.push(line);
+            return Ok(curr_input_lines);
+        }
+
+        let mut input = line.clone();
 
         let first_line_index: usize = term_width as usize - prompt_len;
 
@@ -246,6 +169,18 @@ impl RCONShell<'_> {
         }
 
         return Ok(curr_input_lines);
+    }
+
+    fn print_prompt(&mut self) -> std::io::Result<usize> {
+        execute!(self.stdout, SetForegroundColor(Color::Green))?;
+        self.stdout.write(&self.gen_prompt_addr())?;
+
+        execute!(self.stdout, SetForegroundColor(Color::White))?;
+        self.stdout.write(self.prompt_chars.as_bytes())?;
+
+        execute!(self.stdout, Clear(ClearType::FromCursorDown))?;
+
+        Ok(self.gen_prompt_addr().len() + self.prompt_chars.len())
     }
 
     fn parse_response_for_unknown_command(response: &str) -> bool {
@@ -296,10 +231,11 @@ impl RCONShell<'_> {
         //If the response length is greater than 0 (to avoid empty lines)
         if response.len() > 0 {
             //Go through the lines of the parsed response (either the response alone or the unknown command response styled)
-            for (line, style) in response_lines {
-                execute!(self.stdout, SetStyle(style))?;
-                self.stdout.write(&[b'\n'])?;
+            for (i, (line, style)) in response_lines.iter().enumerate() {
+                execute!(self.stdout, SetStyle(*style))?;
+
                 self.stdout.write(line.as_bytes())?;
+                self.stdout.write(&[b'\n'])?;
 
                 //Reset the color (only necessary if it was an error)
                 execute!(
