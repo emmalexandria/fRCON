@@ -114,8 +114,6 @@ impl RCONShell<'_> {
         Ok(true)
     }
 
-    ///Where all character based shell input is handled. Inherits the return type of poll_events to give it the ability to
-    ///arbitrarily cause the loop to exit
     fn handle_char_events(&mut self, code: KeyCode) -> std::io::Result<bool> {
         match code {
             KeyCode::Up => {
