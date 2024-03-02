@@ -7,7 +7,7 @@ use shell::RCONShell;
 mod rcon;
 mod shell;
 
-const VERSION: &str = "0.1.0";
+const VERSION: &str = "1.0.0";
 
 #[derive(FromArgs)]
 #[argh(description = "Minecraft RCON Implementation for Rust")]
