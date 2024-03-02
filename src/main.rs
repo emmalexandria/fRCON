@@ -61,7 +61,7 @@ async fn main() {
         std::process::exit(0);
     }
 
-    let mut shell = RCONShell::new(&mut rcon, String::from("/"), args.address, args.port);
+    let mut shell = RCONShell::new(&mut rcon, String::from(">>"), args.address, args.port);
 
     shell.run().await;
 }
