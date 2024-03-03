@@ -1,5 +1,5 @@
 # mcrscon
-An RCON client for minecraft written in Rust, made for fun and profit. Includes nicely formatted command responses. Does not yet include command history support, but it is planned.
+An RCON client for Minecraft written in Rust, made for fun and profit. Includes nicely formatted command responses. Does not yet include command history support, but it is planned.
 
 I cannot overstate how much the work for communicating over RCON in this project was done by [rust-rcon](https://github.com/panicbit/rust-rcon/blob/master/src/packet.rs), whose code for representing, serialising, and deserialising packets was shamelessly stolen by me. 
 
