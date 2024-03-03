@@ -13,6 +13,7 @@ pub enum Response {
     UnknownItem,
     InvalidInteger,
     NoElement,
+    ExpectedInteger,
     //TO BE IMPLEMENTED
     //IntegerMin (integer less than 0)
     Default,
@@ -29,6 +30,7 @@ impl Response {
             Response::UnknownItem => "Unknown item '",
             Response::InvalidInteger => "Invalid integer '",
             Response::NoElement => "Can't find element '",
+            Response::ExpectedInteger => "Expected integer",
             Response::Default => "",
         };
     }
@@ -43,6 +45,7 @@ impl Response {
             Response::UnknownItem,
             Response::InvalidInteger,
             Response::NoElement,
+            Response::ExpectedInteger,
         ]
         .iter()
     }
@@ -79,13 +82,15 @@ impl Response {
 
                 let sections = response.split_once(":").unwrap();
                 lines.push((sections.0.to_string(), ContentStyle::new().bold()));
-                lines.push((
-                    sections.1.trim().to_string(),
-                    ContentStyle::new()
-                        .attribute(Attribute::NoBold)
-                        //once again, Attribute::NoBold seems to add a random underline
-                        .attribute(Attribute::NoUnderline),
-                ));
+                if sections.1.trim().len() > 0 {
+                    lines.push((
+                        sections.1.trim().to_string(),
+                        ContentStyle::new()
+                            .attribute(Attribute::NoBold)
+                            //once again, Attribute::NoBold seems to add a random underline
+                            .attribute(Attribute::NoUnderline),
+                    ));
+                }
 
                 return lines;
             }
@@ -136,6 +141,15 @@ impl Response {
                 return lines;
             }
             Response::NoElement => return vec![(response, ContentStyle::new().red())],
+            Response::ExpectedInteger => {
+                let mut lines = Vec::<(String, ContentStyle)>::new();
+
+                let sections = response.split_at(id_str.len());
+                lines.push((sections.0.to_string(), ContentStyle::new().red().bold()));
+                lines.push((sections.1.to_string(), ContentStyle::new().red()));
+
+                return lines;
+            }
             _ => return vec![(response, ContentStyle::new().white())],
         }
     }
