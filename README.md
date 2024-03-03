@@ -7,8 +7,6 @@ Multiple commands can be sent with a wait parameter with an optional silent mode
 ## Caveats
 Currently, the main caveat is that the fix for [this bug](https://bugs.mojang.com/browse/MC-154617) is not implemented. This means that the stop command won't work on Minecraft versions earlier than 20w16a. This was an intentional decision.
 
-In addition, the way this shell outputs makes it difficult to parse in scripts.
-
 ## Project goals
 - Parse multiple reasons for command failure and display them more nicely as errors
 - Provide a highly readable command history
