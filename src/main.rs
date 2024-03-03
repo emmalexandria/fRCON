@@ -5,6 +5,7 @@ use argh::FromArgs;
 use shell::RCONShell;
 
 mod rcon;
+mod responses;
 mod shell;
 
 const VERSION: &str = "1.0.0";

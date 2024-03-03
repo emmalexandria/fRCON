@@ -7,9 +7,7 @@ use crossterm::{execute, terminal, terminal::ClearType};
 use std::io::{self, Write};
 
 use crate::rcon::RCONConnection;
-
-//Used to parse commands for this response, because the way it normally prints is very ugly
-const UNKNOWN_COMMAND_RESPONSE: &str = "Unknown or incomplete command, see below for error";
+use crate::responses::Response;
 
 pub struct RCONShell<'a> {
     conn: &'a mut RCONConnection,
@@ -116,21 +114,12 @@ impl RCONShell<'_> {
         Ok(self.gen_prompt_addr().len() + self.prompt_chars.len())
     }
 
-    fn parse_response_for_unknown_command(response: &str) -> bool {
-        //check if the response says the command is unknown or incomplete to print it in a prettier way
-        let response_len = UNKNOWN_COMMAND_RESPONSE.len();
-        if response.len() > response_len {
-            return &response[0..response_len] == UNKNOWN_COMMAND_RESPONSE;
-        }
-
-        return false;
-    }
-
     ///Adds a line to the history vec and prints it to the screen.
     //There's a lot of ugliness in this function purely due to my desire to parse the unknown command response
     //and print something nicer
     fn add_history_line(&mut self, command: String, response: String) -> std::io::Result<()> {
-        let response_lines = RCONShell::get_styled_response(response.clone());
+        let res_type = Response::get_from_response_str(&response);
+        let response_lines = res_type.get_output(response.clone());
 
         execute!(self.stdout, MoveToColumn(0), Clear(ClearType::CurrentLine))?;
         self.stdout.write(self.prompt_chars.as_bytes())?;
@@ -159,23 +148,6 @@ impl RCONShell<'_> {
         self.stdout.write(&[b'\n'])?;
 
         Ok(())
-    }
-
-    ///If the reponse indicates the command is unknown or incomplete, this function returns
-    ///a multiline version of the response with content styles to make
-    ///the error clearer. Otherwise, it returns only the original response formatted in white
-    fn get_styled_response(response: String) -> Vec<(String, ContentStyle)> {
-        let mut response_lines = Vec::<(String, ContentStyle)>::new();
-
-        if RCONShell::parse_response_for_unknown_command(&response) {
-            let sections = response.split_at(UNKNOWN_COMMAND_RESPONSE.len());
-            response_lines.push((sections.0.to_string(), ContentStyle::new().red().bold()));
-            response_lines.push((sections.1.to_string(), ContentStyle::new().red()));
-        } else {
-            response_lines.push((response, ContentStyle::new().white()));
-        }
-
-        return response_lines;
     }
 
     fn gen_prompt_addr(&self) -> Vec<u8> {
