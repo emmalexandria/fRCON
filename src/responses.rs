@@ -10,6 +10,11 @@ pub enum Response {
     UnknownCommand,
     PlayerNotFound,
     ListResponse,
+    UnknownItem,
+    InvalidInteger,
+    NoElement,
+    //TO BE IMPLEMENTED
+    //IntegerMin (integer less than 0)
     Default,
 }
 
@@ -21,6 +26,9 @@ impl Response {
             Response::UnknownCommand => "Unknown or incomplete command, see below for error",
             Response::PlayerNotFound => "No player was found",
             Response::ListResponse => "There are",
+            Response::UnknownItem => "Unknown item '",
+            Response::InvalidInteger => "Invalid integer '",
+            Response::NoElement => "Can't find element '",
             Response::Default => "",
         };
     }
@@ -32,6 +40,9 @@ impl Response {
             Response::UnknownCommand,
             Response::PlayerNotFound,
             Response::ListResponse,
+            Response::UnknownItem,
+            Response::InvalidInteger,
+            Response::NoElement,
         ]
         .iter()
     }
@@ -79,6 +90,52 @@ impl Response {
                 return lines;
             }
             Response::PlayerNotFound => return vec![(response, ContentStyle::new().red())],
+            Response::UnknownItem => {
+                let mut lines = Vec::<(String, ContentStyle)>::new();
+
+                let sections = response.split_inclusive("'");
+                for (i, section) in sections.enumerate() {
+                    if i == 0 {
+                        lines.push((section.to_string(), ContentStyle::new().red().bold()))
+                    } else if i == 1 {
+                        lines[0].0.push_str(section)
+                    } else {
+                        lines.push((
+                            section.to_string(),
+                            ContentStyle::new()
+                                .red()
+                                .attribute(Attribute::NoBold)
+                                .attribute(Attribute::NoUnderline),
+                        ));
+                    }
+                }
+
+                return lines;
+            }
+            Response::InvalidInteger => {
+                let mut lines = Vec::<(String, ContentStyle)>::new();
+
+                //this command is tricky to parse. There's no real clear delimiter string besides the command truncation ellipsis
+                let sections = response.split_inclusive("'");
+                for (i, section) in sections.enumerate() {
+                    if i == 0 {
+                        lines.push((section.to_string(), ContentStyle::new().red().bold()))
+                    } else if i == 1 {
+                        lines[0].0.push_str(section)
+                    } else {
+                        lines.push((
+                            section.to_string(),
+                            ContentStyle::new()
+                                .red()
+                                .attribute(Attribute::NoBold)
+                                .attribute(Attribute::NoUnderline),
+                        ));
+                    }
+                }
+
+                return lines;
+            }
+            Response::NoElement => return vec![(response, ContentStyle::new().red())],
             _ => return vec![(response, ContentStyle::new().white())],
         }
     }
