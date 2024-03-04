@@ -2,7 +2,7 @@ use std::slice::Iter;
 
 use crossterm::style::{Attribute, ContentStyle, Stylize};
 
-use crate::response::Response;
+use crate::game_mapper::Response;
 
 //I'm really not sure if this is a clever or dumb way to handle the task of formatting arbitrary responses from a short identifying string
 //I wrote this with the intention of avoiding having named functions referring to specific responses.
@@ -21,8 +21,7 @@ pub enum MinecraftResponse {
     Default,
 }
 
-impl Response for MinecraftResponse {
-    type GameResponse = MinecraftResponse;
+impl Response<MinecraftResponse> for MinecraftResponse {
     //Returns the most identifying part of the response. Might need to get a little more complicated with it, for example the list command identifier is very
     //short. Not sure if that's a problem.
     fn get_id_string(response: &MinecraftResponse) -> &'static str {
@@ -56,7 +55,7 @@ impl Response for MinecraftResponse {
     }
 
     //Iterate over possible response values and identify if the response matches any of them
-    fn get_from_response_str(response: &str) -> MinecraftResponse {
+    fn from_response_str(response: &str) -> MinecraftResponse {
         for res in MinecraftResponse::iterator() {
             let id_str = MinecraftResponse::get_id_string(res);
             if response.len() >= id_str.len() {

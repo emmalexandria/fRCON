@@ -2,35 +2,62 @@ use crossterm::execute;
 use crossterm::style::{Attribute, Color, ContentStyle, SetStyle, Stylize};
 use std::borrow::Cow;
 use std::io::{self, Write};
+use std::marker::PhantomData;
 
+use crate::game_mapper::{self, Commands, GameMap, GameMapper, Response};
 use crate::minecraft::responses::MinecraftResponse;
 use crate::rcon::RCONConnection;
-use crate::response::Response;
 
-use reedline::{Prompt, PromptEditMode, PromptHistorySearch, Reedline, Signal};
+use reedline::{ExampleHighlighter, Prompt, PromptEditMode, PromptHistorySearch, Reedline, Signal};
 
-pub struct RCONShell<'a> {
+pub struct RCONShell<'a, Game, Res> {
     conn: &'a mut RCONConnection,
     //Held reference to stdout to flush once per loop
     stdout: io::Stdout,
+    game: PhantomData<Game>,
+    res: PhantomData<Res>,
 
     //Used for generating a fancy little prelude to the prompt
     line_editor: Reedline,
     prompt: RCONPrompt,
 }
 
-impl RCONShell<'_> {
-    pub fn new(conn: &mut RCONConnection, ip: String) -> RCONShell {
-        RCONShell {
+impl<Game, Res> RCONShell<'_, Game, Res>
+where
+    Game: GameMap,
+    Res: Response,
+{
+    pub fn new(conn: &mut RCONConnection, ip: String) -> RCONShell<Game, Res> {
+        let mut shell = RCONShell {
             conn,
             stdout: io::stdout(),
+            game: PhantomData,
+            res: PhantomData,
+
             line_editor: Reedline::create(),
             prompt: RCONPrompt::create(ip),
-        }
+        };
+
+        //had to do this dumb stuff to get rust to stop complaining at me for some reason. might have just been a formatting mistake trying to do
+        //it inline in the structure
+
+        //Using the example highlighter is fine for now. Implementing custom highlighters to match the command systems of games
+        //would be a lot of work for an admittably cool result, but for now its not going to be done.
+        let mut highlighter =
+            ExampleHighlighter::new(game_mapper::GameMapper::<Game, Res>::get_commands());
+        highlighter.change_colors(
+            nu_ansi_term::Color::Green,
+            nu_ansi_term::Color::White,
+            nu_ansi_term::Color::White,
+        );
+
+        shell.line_editor = Reedline::create().with_highlighter(Box::new(highlighter));
+
+        return shell;
     }
 
     pub async fn run(&mut self) -> io::Result<()> {
-        println!("{}", "\nCTRL+C or CTRL+D to quit. \n");
+        println!("{}", "\nCTRL+C or CTRL+D to quit.");
 
         self.shell_loop().await?;
         Ok(())
@@ -57,7 +84,7 @@ impl RCONShell<'_> {
     }
 
     fn print_command_response(&mut self, res: String) -> std::io::Result<()> {
-        let res_type = MinecraftResponse::get_from_response_str(&res);
+        let res_type = MinecraftResponse::from_response_str(&res);
         let response_lines = res_type.get_output(res.clone());
         for line in response_lines {
             let line_with_newline: String = line.0 + "\n";
@@ -121,11 +148,11 @@ impl Prompt for RCONPrompt {
     }
 
     fn get_prompt_color(&self) -> Color {
-        Color::DarkGreen
+        Color::Green
     }
 
     fn get_indicator_color(&self) -> Color {
-        Color::Green
+        Color::White
     }
 
     fn right_prompt_on_last_line(&self) -> bool {

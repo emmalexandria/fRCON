@@ -37,10 +37,10 @@ impl RCONCommand {
 }
 
 //defines the size of the data preceeding body in RCONPacket
-const PACKET_SIZE_CONST: i32 = 10;
+const PACKET_SIZE_CONST: usize = 10;
 
 //max size of the body in bytes
-const MAX_BODY_SIZE: usize = 1446;
+const MAX_PACKET_SIZE: usize = 4096;
 
 #[derive(Debug)]
 struct RCONPacket {
@@ -52,7 +52,7 @@ struct RCONPacket {
 
 impl RCONPacket {
     pub fn new(id: i32, command: RCONCommand, body: String) -> io::Result<RCONPacket> {
-        if body.len() > MAX_BODY_SIZE {
+        if body.len() > (MAX_PACKET_SIZE - PACKET_SIZE_CONST) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "Command exceeds max size of body",
@@ -61,7 +61,7 @@ impl RCONPacket {
 
         //length = id: 4, command: 4, null terminator after command: 1, null terminator at end: 1
         Ok(RCONPacket {
-            length: PACKET_SIZE_CONST + body.len() as i32,
+            length: (PACKET_SIZE_CONST + body.len()) as i32,
             id,
             command,
             body,
@@ -95,7 +95,7 @@ impl RCONPacket {
         let id = i32::from_le_bytes(buf);
         stream.read_exact(&mut buf).await?;
         let command = i32::from_le_bytes(buf);
-        let body_length = length - PACKET_SIZE_CONST;
+        let body_length = length - (PACKET_SIZE_CONST as i32);
         let mut body_buffer = Vec::with_capacity(body_length as usize);
 
         stream
