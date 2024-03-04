@@ -4,10 +4,13 @@ use crossterm::style::{
 };
 use crossterm::terminal::Clear;
 use crossterm::{execute, terminal, terminal::ClearType};
+use std::borrow::Cow;
 use std::io::{self, Write};
 
 use crate::rcon::RCONConnection;
 use crate::responses::Response;
+
+use reedline::{DefaultPrompt, Prompt, PromptEditMode, PromptHistorySearch, Reedline, Signal};
 
 pub struct RCONShell<'a> {
     conn: &'a mut RCONConnection,
@@ -18,6 +21,9 @@ pub struct RCONShell<'a> {
     //Used for generating a fancy little prelude to the prompt
     ip: String,
     port: u16,
+
+    line_editor: Reedline,
+    prompt: DefaultPrompt,
 }
 
 impl RCONShell<'_> {
@@ -33,6 +39,9 @@ impl RCONShell<'_> {
             stdout: io::stdout(),
             ip,
             port,
+
+            line_editor: Reedline::create(),
+            prompt: DefaultPrompt::default(),
         }
     }
 
@@ -49,9 +58,35 @@ impl RCONShell<'_> {
 
     async fn shell_loop(&mut self) -> std::io::Result<()> {
         loop {
-            let prompt_len = self.print_prompt()?;
+            let sig = self.line_editor.read_line(&self.prompt);
 
-            let mut line = String::new();
+            match sig {
+                Ok(Signal::Success(buffer)) => {
+                    let res = self.conn.send_command(&buffer).await?;
+                    let res_type = Response::get_from_response_str(&res);
+                    let response_lines = res_type.get_output(res.clone());
+                    for line in response_lines {
+                        execute!(self.stdout, SetStyle(line.1))?;
+                        self.stdout.write(line.0.as_bytes())?;
+                        self.stdout.write(&[b'\n'])?;
+                    }
+                    execute!(
+                        self.stdout,
+                        SetStyle(
+                            ContentStyle::new()
+                                .attribute(Attribute::NoBold)
+                                .attribute(Attribute::NoUnderline)
+                        )
+                    )?;
+                    self.stdout.flush()?;
+                }
+                Ok(Signal::CtrlD) | Ok(Signal::CtrlC) => {
+                    break;
+                }
+                _ => {}
+            }
+
+            /*  let mut line = String::new();
             io::stdin().read_line(&mut line)?;
 
             let command = line.trim();
@@ -67,7 +102,7 @@ impl RCONShell<'_> {
             let res = self.conn.send_command(&command).await?;
             self.add_history_line(command.to_string(), res)?;
 
-            self.stdout.flush()?;
+            self.stdout.flush()?; */
         }
 
         Ok(())
@@ -153,5 +188,34 @@ impl RCONShell<'_> {
     fn gen_prompt_addr(&self) -> Vec<u8> {
         let prompt_string = String::from("[".to_owned() + &self.ip + "] ");
         return prompt_string.as_bytes().to_vec();
+    }
+}
+
+struct RCONPrompt {
+    ip: String,
+}
+
+impl Prompt for RCONPrompt {
+    fn render_prompt_left(&self) -> Cow<'_, str> {
+        return Cow::Borrowed(&self.ip);
+    }
+
+    fn render_prompt_right(&self) -> Cow<'_, str> {
+        return Cow::Borrowed("");
+    }
+
+    fn render_prompt_indicator(&self, prompt_mode: PromptEditMode) -> Cow<'_, str> {
+        return Cow::Borrowed("");
+    }
+
+    fn render_prompt_multiline_indicator(&self) -> Cow<'_, str> {
+        return Cow::Borrowed("");
+    }
+
+    fn render_prompt_history_search_indicator(
+        &self,
+        history_search: PromptHistorySearch,
+    ) -> Cow<'_, str> {
+        return Cow::Borrowed("");
     }
 }

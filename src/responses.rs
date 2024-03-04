@@ -73,7 +73,13 @@ impl Response {
 
                 let sections = response.split_at(id_str.len());
                 response_lines.push((sections.0.to_string(), ContentStyle::new().red().bold()));
-                response_lines.push((sections.1.to_string(), ContentStyle::new().red()));
+                response_lines.push((
+                    sections.1.to_string(),
+                    ContentStyle::new()
+                        .red()
+                        .attribute(Attribute::NoBold)
+                        .attribute(Attribute::NoUnderline),
+                ));
 
                 return response_lines;
             }
