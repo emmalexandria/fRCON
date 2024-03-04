@@ -15,8 +15,6 @@ pub struct RCONShell<'a> {
     stdout: io::Stdout,
 
     //Used for generating a fancy little prelude to the prompt
-    ip: String,
-
     line_editor: Reedline,
     prompt: RCONPrompt,
 }
@@ -26,8 +24,6 @@ impl RCONShell<'_> {
         RCONShell {
             conn,
             stdout: io::stdout(),
-            ip: ip.clone(),
-
             line_editor: Reedline::create(),
             prompt: RCONPrompt::create(ip),
         }
@@ -47,7 +43,7 @@ impl RCONShell<'_> {
             match sig {
                 Ok(Signal::Success(buffer)) => {
                     let res = self.conn.send_command(&buffer).await?;
-                    self.print_command_response(res);
+                    self.print_command_response(res)?;
                 }
                 Ok(Signal::CtrlD) | Ok(Signal::CtrlC) => {
                     println!("Exiting...");
