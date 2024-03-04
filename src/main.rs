@@ -4,8 +4,8 @@ use std::{thread::sleep, time::Duration};
 use argh::FromArgs;
 use shell::RCONShell;
 
+mod minecraft;
 mod rcon;
-mod responses;
 mod shell;
 
 const VERSION: &str = "1.0.0";
@@ -92,7 +92,7 @@ async fn main() {
         std::process::exit(0);
     }
 
-    let mut shell = RCONShell::new(&mut rcon, String::from(">>"), args.address, args.port);
+    let mut shell = RCONShell::new(&mut rcon, args.address);
 
     match shell.run().await {
         Err(e) => {
