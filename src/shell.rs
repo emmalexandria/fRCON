@@ -1,16 +1,13 @@
-use crossterm::cursor::{MoveToColumn, MoveUp, SetCursorStyle};
-use crossterm::style::{
-    Attribute, Color, ContentStyle, ResetColor, SetAttribute, SetForegroundColor, SetStyle, Stylize,
-};
-use crossterm::terminal::Clear;
-use crossterm::{execute, terminal, terminal::ClearType};
+use crossterm::execute;
+use crossterm::style::{Attribute, Color, ContentStyle, SetStyle, Stylize};
 use std::borrow::Cow;
 use std::io::{self, Write};
 
-use crate::minecraft::responses::{self, Response};
+use crate::minecraft::responses::MinecraftResponse;
 use crate::rcon::RCONConnection;
+use crate::response::Response;
 
-use reedline::{DefaultPrompt, Prompt, PromptEditMode, PromptHistorySearch, Reedline, Signal};
+use reedline::{Prompt, PromptEditMode, PromptHistorySearch, Reedline, Signal};
 
 pub struct RCONShell<'a> {
     conn: &'a mut RCONConnection,
@@ -37,8 +34,8 @@ impl RCONShell<'_> {
     }
 
     pub async fn run(&mut self) -> io::Result<()> {
-        println!("{}", "\nCTRL+C or CTRL+D to quit.");
-        println!("{}", "────────────────────");
+        println!("{}", "\nCTRL+C or CTRL+D to quit. \n");
+
         self.shell_loop().await?;
         Ok(())
     }
@@ -50,23 +47,7 @@ impl RCONShell<'_> {
             match sig {
                 Ok(Signal::Success(buffer)) => {
                     let res = self.conn.send_command(&buffer).await?;
-                    let res_type = Response::get_from_response_str(&res);
-                    let response_lines = res_type.get_output(res.clone());
-                    for line in response_lines {
-                        execute!(
-                            self.stdout,
-                            SetStyle(ContentStyle::new().attribute(Attribute::Reset))
-                        )?;
-                        execute!(self.stdout, SetStyle(line.1))?;
-                        println!("{}", line.0);
-                        //self.stdout.write(line.0.as_bytes())?;
-                        // self.stdout.write(&[b'\n'])?;
-                    }
-                    execute!(
-                        self.stdout,
-                        SetStyle(ContentStyle::new().attribute(Attribute::Reset))
-                    )?;
-                    self.stdout.flush()?;
+                    self.print_command_response(res);
                 }
                 Ok(Signal::CtrlD) | Ok(Signal::CtrlC) => {
                     println!("Exiting...");
@@ -75,6 +56,27 @@ impl RCONShell<'_> {
                 _ => {}
             }
         }
+
+        Ok(())
+    }
+
+    fn print_command_response(&mut self, res: String) -> std::io::Result<()> {
+        let res_type = MinecraftResponse::get_from_response_str(&res);
+        let response_lines = res_type.get_output(res.clone());
+        for line in response_lines {
+            let line_with_newline: String = line.0 + "\n";
+            execute!(
+                self.stdout,
+                SetStyle(ContentStyle::new().attribute(Attribute::Reset))
+            )?;
+            execute!(self.stdout, SetStyle(line.1))?;
+            self.stdout.write(line_with_newline.as_bytes())?;
+        }
+        execute!(
+            self.stdout,
+            SetStyle(ContentStyle::new().attribute(Attribute::Reset))
+        )?;
+        self.stdout.flush()?;
 
         Ok(())
     }

@@ -6,6 +6,7 @@ use shell::RCONShell;
 
 mod minecraft;
 mod rcon;
+mod response;
 mod shell;
 
 const VERSION: &str = "1.0.0";

@@ -2,11 +2,13 @@ use std::slice::Iter;
 
 use crossterm::style::{Attribute, ContentStyle, Stylize};
 
+use crate::response::Response;
+
 //I'm really not sure if this is a clever or dumb way to handle the task of formatting arbitrary responses from a short identifying string
 //I wrote this with the intention of avoiding having named functions referring to specific responses.
 
 #[derive(Clone)]
-pub enum Response {
+pub enum MinecraftResponse {
     UnknownCommand,
     PlayerNotFound,
     ListResponse,
@@ -19,41 +21,44 @@ pub enum Response {
     Default,
 }
 
-impl Response {
+impl Response for MinecraftResponse {
+    type GameResponse = MinecraftResponse;
     //Returns the most identifying part of the response. Might need to get a little more complicated with it, for example the list command identifier is very
     //short. Not sure if that's a problem.
-    fn get_id_string(response: &Response) -> &'static str {
+    fn get_id_string(response: &MinecraftResponse) -> &'static str {
         return match response {
-            Response::UnknownCommand => "Unknown or incomplete command, see below for error",
-            Response::PlayerNotFound => "No player was found",
-            Response::ListResponse => "There are",
-            Response::UnknownItem => "Unknown item '",
-            Response::InvalidInteger => "Invalid integer '",
-            Response::NoElement => "Can't find element '",
-            Response::ExpectedInteger => "Expected integer",
-            Response::Default => "",
+            MinecraftResponse::UnknownCommand => {
+                "Unknown or incomplete command, see below for error"
+            }
+            MinecraftResponse::PlayerNotFound => "No player was found",
+            MinecraftResponse::ListResponse => "There are",
+            MinecraftResponse::UnknownItem => "Unknown item '",
+            MinecraftResponse::InvalidInteger => "Invalid integer '",
+            MinecraftResponse::NoElement => "Can't find element '",
+            MinecraftResponse::ExpectedInteger => "Expected integer",
+            MinecraftResponse::Default => "",
         };
     }
 
     //Return an iterator of all responses (besides default, which means we don't format it)
     //The repetition is a bit ugly, but it works.
-    fn iterator() -> Iter<'static, Response> {
+    fn iterator() -> Iter<'static, MinecraftResponse> {
         [
-            Response::UnknownCommand,
-            Response::PlayerNotFound,
-            Response::ListResponse,
-            Response::UnknownItem,
-            Response::InvalidInteger,
-            Response::NoElement,
-            Response::ExpectedInteger,
+            MinecraftResponse::UnknownCommand,
+            MinecraftResponse::PlayerNotFound,
+            MinecraftResponse::ListResponse,
+            MinecraftResponse::UnknownItem,
+            MinecraftResponse::InvalidInteger,
+            MinecraftResponse::NoElement,
+            MinecraftResponse::ExpectedInteger,
         ]
         .iter()
     }
 
     //Iterate over possible response values and identify if the response matches any of them
-    pub fn get_from_response_str(response: &str) -> Response {
-        for res in Response::iterator() {
-            let id_str = Response::get_id_string(res);
+    fn get_from_response_str(response: &str) -> MinecraftResponse {
+        for res in MinecraftResponse::iterator() {
+            let id_str = MinecraftResponse::get_id_string(res);
             if response.len() >= id_str.len() {
                 if &response[0..id_str.len()] == id_str {
                     return res.clone();
@@ -61,14 +66,14 @@ impl Response {
             }
         }
 
-        return Response::Default;
+        return MinecraftResponse::Default;
     }
 
     //Huge match statement which contains the formatting for all the responses we want to modify formatting for.
-    pub fn get_output(&self, response: String) -> Vec<(String, ContentStyle)> {
-        let id_str = Response::get_id_string(&self);
+    fn get_output(&self, response: String) -> Vec<(String, ContentStyle)> {
+        let id_str = MinecraftResponse::get_id_string(&self);
         match self {
-            Response::UnknownCommand => {
+            MinecraftResponse::UnknownCommand => {
                 let mut response_lines = Vec::<(String, ContentStyle)>::new();
 
                 let sections = response.split_at(id_str.len());
@@ -83,7 +88,7 @@ impl Response {
 
                 return response_lines;
             }
-            Response::ListResponse => {
+            MinecraftResponse::ListResponse => {
                 let mut lines = Vec::<(String, ContentStyle)>::new();
 
                 let sections = response.split_once(":").unwrap();
@@ -100,8 +105,10 @@ impl Response {
 
                 return lines;
             }
-            Response::PlayerNotFound => return vec![(response, ContentStyle::new().red())],
-            Response::UnknownItem => {
+            MinecraftResponse::PlayerNotFound => {
+                return vec![(response, ContentStyle::new().red())]
+            }
+            MinecraftResponse::UnknownItem => {
                 let mut lines = Vec::<(String, ContentStyle)>::new();
 
                 let sections = response.split_inclusive("'");
@@ -123,7 +130,7 @@ impl Response {
 
                 return lines;
             }
-            Response::InvalidInteger => {
+            MinecraftResponse::InvalidInteger => {
                 let mut lines = Vec::<(String, ContentStyle)>::new();
 
                 //this command is tricky to parse. There's no real clear delimiter string besides the command truncation ellipsis
@@ -146,8 +153,8 @@ impl Response {
 
                 return lines;
             }
-            Response::NoElement => return vec![(response, ContentStyle::new().red())],
-            Response::ExpectedInteger => {
+            MinecraftResponse::NoElement => return vec![(response, ContentStyle::new().red())],
+            MinecraftResponse::ExpectedInteger => {
                 let mut lines = Vec::<(String, ContentStyle)>::new();
 
                 let sections = response.split_at(id_str.len());
