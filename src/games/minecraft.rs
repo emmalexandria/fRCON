@@ -1,3 +1,4 @@
+use regex::Regex;
 use std::slice::Iter;
 
 use crossterm::style::{Attribute, ContentStyle, Stylize};
@@ -102,6 +103,7 @@ pub enum MinecraftResponse {
     UnknownCommand,
     PlayerNotFound,
     ListResponse,
+    BanListResponse,
     UnknownItem,
     InvalidInteger,
     NoElement,
@@ -121,7 +123,10 @@ impl Response<MinecraftResponse> for MinecraftResponse {
             }
             MinecraftResponse::PlayerNotFound => "No player was found",
             //Handles both the list and banlist case, as their syntax is very similar
-            MinecraftResponse::ListResponse => "There are",
+            MinecraftResponse::ListResponse => {
+                r"There are (\d{1,4}) of a max of (\d{1,4}) players online"
+            }
+            MinecraftResponse::BanListResponse => r"There are (\d{1,4}) ban\(s\)",
             MinecraftResponse::UnknownItem => "Unknown item '",
             MinecraftResponse::InvalidInteger => "Invalid integer '",
             MinecraftResponse::NoElement => "Can't find element '",
@@ -137,6 +142,7 @@ impl Response<MinecraftResponse> for MinecraftResponse {
             MinecraftResponse::UnknownCommand,
             MinecraftResponse::PlayerNotFound,
             MinecraftResponse::ListResponse,
+            MinecraftResponse::BanListResponse,
             MinecraftResponse::UnknownItem,
             MinecraftResponse::InvalidInteger,
             MinecraftResponse::NoElement,
@@ -149,10 +155,9 @@ impl Response<MinecraftResponse> for MinecraftResponse {
     fn from_response_str(response: &str) -> MinecraftResponse {
         for res in MinecraftResponse::iterator() {
             let id_str = MinecraftResponse::get_id_string(res);
-            if response.len() >= id_str.len() {
-                if &response[0..id_str.len()] == id_str {
-                    return res.clone();
-                }
+            let regex = Regex::new(id_str).unwrap();
+            if regex.is_match(response) {
+                return res.clone();
             }
         }
 
@@ -182,36 +187,37 @@ impl Response<MinecraftResponse> for MinecraftResponse {
             MinecraftResponse::ListResponse => {
                 let mut lines = Vec::<(String, ContentStyle)>::new();
 
-                let sections = response.split_once(":");
-                match sections {
-                    //List or banlist with player case
-                    Some(sections) => {
-                        lines.push((sections.0.to_string(), ContentStyle::new().bold()));
-                        match sections.0.contains("ban") {
-                            true => {
-                                let players = sections.1.split(".");
-                                for player in players {
-                                    lines.push((
-                                        player.to_string(),
-                                        ContentStyle::new().attribute(Attribute::Reset),
-                                    ))
-                                }
-                            }
-                            false => {
-                                if sections.1.trim().len() > 0 {
-                                    lines.push((
-                                        sections.1.trim().to_string(),
-                                        ContentStyle::new().attribute(Attribute::Reset),
-                                    ));
-                                }
-                            }
-                        }
+                let sections = response.split_once(":").unwrap();
+                //List or banlist with player case
 
-                        return lines;
-                    }
-                    //Banlist with no players banned
-                    None => return vec![(response.to_string(), ContentStyle::new())],
+                lines.push((sections.0.to_string(), ContentStyle::new().bold()));
+
+                if sections.1.trim().len() > 0 {
+                    lines.push((
+                        sections.1.trim().to_string(),
+                        ContentStyle::new().attribute(Attribute::Reset),
+                    ));
                 }
+
+                return lines;
+            }
+            //Nicely parsing the banlist response will probably require some complicated regex (due to the possibility of it containing IP addresses)
+            MinecraftResponse::BanListResponse => {
+                let mut lines = Vec::<(String, ContentStyle)>::new();
+
+                let sections = response.split_once(":").unwrap();
+                //List or banlist with player case
+
+                lines.push((sections.0.to_string(), ContentStyle::new().bold()));
+
+                if sections.1.trim().len() > 0 {
+                    lines.push((
+                        sections.1.trim().to_string(),
+                        ContentStyle::new().attribute(Attribute::Reset),
+                    ));
+                }
+
+                return lines;
             }
             MinecraftResponse::PlayerNotFound => {
                 return vec![(response.to_string(), ContentStyle::new().red())]
