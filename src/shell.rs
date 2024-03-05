@@ -58,6 +58,7 @@ impl RCONShell<'_> {
 
             match sig {
                 Ok(Signal::Success(buffer)) => {
+                    if buffer == "quit" {}
                     let res = self.conn.send_command(&buffer).await?;
                     self.print_command_response(res)?;
                 }
