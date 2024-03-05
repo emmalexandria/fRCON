@@ -226,6 +226,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "frcon"
+version = "1.0.0"
+dependencies = [
+ "argh",
+ "bincode",
+ "chrono",
+ "colored",
+ "crossterm",
+ "nu-ansi-term",
+ "reedline",
+ "regex",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "gimli"
 version = "0.28.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -317,22 +333,6 @@ name = "log"
 version = "0.4.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
-
-[[package]]
-name = "mcrscon"
-version = "1.0.0"
-dependencies = [
- "argh",
- "bincode",
- "chrono",
- "colored",
- "crossterm",
- "nu-ansi-term",
- "reedline",
- "regex",
- "serde",
- "tokio",
-]
 
 [[package]]
 name = "memchr"

@@ -30,7 +30,7 @@ struct Args {
 
     #[argh(
         option,
-        description = "enables game specific prompt features (minecraft, rust, factorio, source)",
+        description = "enables game specific prompt features (minecraft)",
         short = 'g',
         default = "Game::from_str(\"generic\").unwrap()"
     )]

@@ -14,9 +14,6 @@ use self::generic::Generic;
 #[derive(Clone)]
 pub enum Game {
     MINECRAFT,
-    FACTORIO,
-    RUST,
-    SOURCE, //hopefully acceptable for now to stick to a generic implementation for valve source games
     GENERIC,
 }
 
@@ -24,9 +21,6 @@ impl std::fmt::Display for Game {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Game::MINECRAFT => write!(f, "Minecraft"),
-            Game::FACTORIO => write!(f, "Factorio"),
-            Game::RUST => write!(f, "Rust"),
-            Game::SOURCE => write!(f, "Source"),
             Game::GENERIC => write!(f, "generic"),
         }
     }
@@ -49,9 +43,6 @@ impl FromStr for Game {
     fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
         match s {
             "minecraft" => return Ok(Game::MINECRAFT),
-            "factorio" => return Ok(Game::FACTORIO),
-            "rust" => return Ok(Game::RUST),
-            "source" => return Ok(Game::SOURCE),
             "generic" => return Ok(Game::GENERIC),
             _ => Err(ParseGameError),
         }
@@ -74,9 +65,6 @@ impl GameMapper {
     pub fn get_command_fn(game: &Game) -> &'static dyn Fn() -> Vec<String> {
         match game {
             Game::MINECRAFT => return &Minecraft::get_commands,
-            Game::FACTORIO => todo!(),
-            Game::RUST => todo!(),
-            Game::SOURCE => todo!(),
             Game::GENERIC => return &Generic::get_commands,
         }
     }
@@ -84,9 +72,6 @@ impl GameMapper {
     pub fn get_response_fn(game: &Game) -> &'static dyn Fn(&str) -> Vec<(String, ContentStyle)> {
         match game {
             Game::MINECRAFT => return &MinecraftResponse::get_output,
-            Game::FACTORIO => todo!(),
-            Game::RUST => todo!(),
-            Game::SOURCE => todo!(),
             Game::GENERIC => return &generic::get_output,
         }
     }
