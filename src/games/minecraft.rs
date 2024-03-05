@@ -102,8 +102,9 @@ impl Minecraft {
 pub enum MinecraftResponse {
     UnknownCommand,
     PlayerNotFound,
-    ListResponse,
-    BanListResponse,
+    Help,
+    ListPlayers,
+    ListBans,
     UnknownItem,
     InvalidInteger,
     NoElement,
@@ -123,10 +124,11 @@ impl Response<MinecraftResponse> for MinecraftResponse {
             }
             MinecraftResponse::PlayerNotFound => "No player was found",
             //Handles both the list and banlist case, as their syntax is very similar
-            MinecraftResponse::ListResponse => {
+            MinecraftResponse::ListPlayers => {
                 r"There are (\d{1,4}) of a max of (\d{1,4}) players online"
             }
-            MinecraftResponse::BanListResponse => r"There are (\d{1,4}) ban\(s\)",
+            MinecraftResponse::Help => "/",
+            MinecraftResponse::ListBans => r"There are (\d{1,4}) ban\(s\)",
             MinecraftResponse::UnknownItem => "Unknown item '",
             MinecraftResponse::InvalidInteger => "Invalid integer '",
             MinecraftResponse::NoElement => "Can't find element '",
@@ -141,8 +143,9 @@ impl Response<MinecraftResponse> for MinecraftResponse {
         [
             MinecraftResponse::UnknownCommand,
             MinecraftResponse::PlayerNotFound,
-            MinecraftResponse::ListResponse,
-            MinecraftResponse::BanListResponse,
+            MinecraftResponse::ListPlayers,
+            MinecraftResponse::ListBans,
+            MinecraftResponse::Help,
             MinecraftResponse::UnknownItem,
             MinecraftResponse::InvalidInteger,
             MinecraftResponse::NoElement,
@@ -184,7 +187,7 @@ impl Response<MinecraftResponse> for MinecraftResponse {
 
                 return response_lines;
             }
-            MinecraftResponse::ListResponse => {
+            MinecraftResponse::ListPlayers => {
                 let mut lines = Vec::<(String, ContentStyle)>::new();
 
                 let sections = response.split_once(":").unwrap();
@@ -201,8 +204,23 @@ impl Response<MinecraftResponse> for MinecraftResponse {
 
                 return lines;
             }
+            MinecraftResponse::Help => {
+                let mut lines = Vec::<(String, ContentStyle)>::new();
+
+                let sections = response.split("/");
+                for (i, section) in sections.into_iter().enumerate() {
+                    if i > 0 {
+                        lines.push((
+                            section.to_string(),
+                            ContentStyle::new().attribute(Attribute::Reset),
+                        ))
+                    }
+                }
+
+                return lines;
+            }
             //Nicely parsing the banlist response will probably require some complicated regex (due to the possibility of it containing IP addresses)
-            MinecraftResponse::BanListResponse => {
+            MinecraftResponse::ListBans => {
                 let mut lines = Vec::<(String, ContentStyle)>::new();
 
                 let sections = response.split_once(":").unwrap();
