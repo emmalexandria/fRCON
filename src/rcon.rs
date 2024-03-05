@@ -6,6 +6,7 @@ use tokio::{
 };
 
 #[derive(Debug)]
+///All possible RCON command types
 enum RCONCommand {
     ServerAuth,
     ServerAuthResponse,
@@ -15,6 +16,7 @@ enum RCONCommand {
 }
 
 impl RCONCommand {
+    ///Returns the appropriate integer for the type
     pub fn to_i32(&self) -> i32 {
         return match self {
             RCONCommand::ServerAuth => 3,
@@ -25,6 +27,7 @@ impl RCONCommand {
         };
     }
 
+    ///Gets an RCON command from an integer. 2 is mapped to two seperate types of packets, but one of them is only used in a server response  
     pub fn from_i32(n: i32, is_response: bool) -> RCONCommand {
         match n {
             3 => RCONCommand::ServerAuth,

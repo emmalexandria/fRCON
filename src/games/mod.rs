@@ -11,12 +11,14 @@ use minecraft::{Minecraft, MinecraftResponse};
 
 use self::generic::Generic;
 
+///Game selection enum. Used in GameMapper and for command line arguments.
 #[derive(Clone)]
 pub enum Game {
     MINECRAFT,
     GENERIC,
 }
 
+///Required for argh
 impl std::fmt::Display for Game {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -26,11 +28,9 @@ impl std::fmt::Display for Game {
     }
 }
 
+///Required for argh
 #[derive(Debug, PartialEq, Eq)]
 pub struct ParseGameError;
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct ResponseFromStrError;
 
 impl std::fmt::Display for ParseGameError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -38,6 +38,7 @@ impl std::fmt::Display for ParseGameError {
     }
 }
 
+///Required for argh
 impl FromStr for Game {
     type Err = ParseGameError;
     fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
@@ -49,16 +50,16 @@ impl FromStr for Game {
     }
 }
 
-//This trait mainly exists to make writing new implementations easier
+///A trait for implementing new response types. This is not a *necessary* trait to implement on new response types, but it
+/// contains everything used to implement the current iterator based technique
 pub trait Response<T> {
     fn get_id_string(response: &T) -> &'static str;
-    ///Return an iterator of all values of response besides default
     fn iterator() -> Iter<'static, T>;
-    // These two are externally used.
     fn from_response_str(response: &str) -> T;
     fn get_output(response: &str) -> Vec<(String, ContentStyle)>;
 }
 
+///Returns function references for getting the command list and getting formatted responses based on the currently selected game
 pub struct GameMapper;
 
 impl GameMapper {
