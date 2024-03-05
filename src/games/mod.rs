@@ -1,12 +1,15 @@
-use std::{marker::PhantomData, path::Display, str::FromStr};
+mod generic;
+mod minecraft;
 
-use argh::FromArgValue;
+use std::str::FromStr;
 
 use std::slice::Iter;
 
 use crossterm::style::ContentStyle;
 
-use crate::minecraft::responses::MinecraftResponse;
+use minecraft::{Minecraft, MinecraftResponse};
+
+use self::generic::Generic;
 
 #[derive(Clone)]
 pub enum Game {
@@ -49,57 +52,42 @@ impl FromStr for Game {
             "factorio" => return Ok(Game::FACTORIO),
             "rust" => return Ok(Game::RUST),
             "source" => return Ok(Game::SOURCE),
+            "generic" => return Ok(Game::GENERIC),
             _ => Err(ParseGameError),
         }
     }
 }
 
+//This trait mainly exists to make writing new implementations easier
 pub trait Response<T> {
-    fn get_id_string(response: &T) -> &'static str
-    where
-        Self: Sized;
+    fn get_id_string(response: &T) -> &'static str;
     ///Return an iterator of all values of response besides default
-    fn iterator() -> Iter<'static, T>
-    where
-        Self: Sized;
+    fn iterator() -> Iter<'static, T>;
     // These two are externally used.
-    fn from_response_str(response: &str) -> T
-    where
-        Self: Sized;
-    fn get_output(&self, response: String) -> Vec<(String, ContentStyle)>;
+    fn from_response_str(response: &str) -> T;
+    fn get_output(response: &str) -> Vec<(String, ContentStyle)>;
 }
 
-pub trait GameMap {
-    const COMMANDS: Vec<String>;
-    type ResponseType;
-    fn get_response(res_string: &str) -> Box<dyn Response<Self::ResponseType>>;
-    fn get_commands() -> Vec<String>;
-}
+pub struct GameMapper;
 
-//maps various calls to the appropriate commands or responses of a given game
-pub struct GameMapper<Game, Res> {
-    game: PhantomData<Game>,
-    res: PhantomData<Res>,
-}
-
-impl<Game, Res> GameMapper<Game, Res>
-where
-    Res: Response<Res>,
-    Game: GameMap,
-{
-    pub fn new() -> Self {
-        Self {
-            game: PhantomData,
-            res: PhantomData,
+impl GameMapper {
+    pub fn get_command_fn(game: &Game) -> &'static dyn Fn() -> Vec<String> {
+        match game {
+            Game::MINECRAFT => return &Minecraft::get_commands,
+            Game::FACTORIO => todo!(),
+            Game::RUST => todo!(),
+            Game::SOURCE => todo!(),
+            Game::GENERIC => return &Generic::get_commands,
         }
     }
 
-    pub fn get_response(response: &str) -> Vec<(String, ContentStyle)> {
-        let parsed_response = Res::from_response_str(response);
-        return parsed_response.get_output(response.to_string());
-    }
-
-    pub fn get_commands() -> Vec<String> {
-        Game::get_commands()
+    pub fn get_response_fn(game: &Game) -> &'static dyn Fn(&str) -> Vec<(String, ContentStyle)> {
+        match game {
+            Game::MINECRAFT => return &MinecraftResponse::get_output,
+            Game::FACTORIO => todo!(),
+            Game::RUST => todo!(),
+            Game::SOURCE => todo!(),
+            Game::GENERIC => return &generic::get_output,
+        }
     }
 }

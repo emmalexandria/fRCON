@@ -2,49 +2,38 @@ use crossterm::execute;
 use crossterm::style::{Attribute, Color, ContentStyle, SetStyle, Stylize};
 use std::borrow::Cow;
 use std::io::{self, Write};
-use std::marker::PhantomData;
 
-use crate::game_mapper::{self, Commands, GameMap, GameMapper, Response};
-use crate::minecraft::responses::MinecraftResponse;
+use crate::games::{Game, GameMapper};
 use crate::rcon::RCONConnection;
 
 use reedline::{ExampleHighlighter, Prompt, PromptEditMode, PromptHistorySearch, Reedline, Signal};
 
-pub struct RCONShell<'a, Game, Res> {
+pub struct RCONShell<'a> {
     conn: &'a mut RCONConnection,
     //Held reference to stdout to flush once per loop
     stdout: io::Stdout,
-    game: PhantomData<Game>,
-    res: PhantomData<Res>,
+
+    command_fn: &'a dyn Fn() -> Vec<String>,
+    response_fn: &'a dyn Fn(&str) -> Vec<(String, ContentStyle)>,
 
     //Used for generating a fancy little prelude to the prompt
     line_editor: Reedline,
     prompt: RCONPrompt,
 }
 
-impl<Game, Res> RCONShell<'_, Game, Res>
-where
-    Game: GameMap,
-    Res: Response,
-{
-    pub fn new(conn: &mut RCONConnection, ip: String) -> RCONShell<Game, Res> {
+impl RCONShell<'_> {
+    pub fn new(conn: &mut RCONConnection, game: Game, ip: String) -> RCONShell {
         let mut shell = RCONShell {
             conn,
             stdout: io::stdout(),
-            game: PhantomData,
-            res: PhantomData,
+            command_fn: GameMapper::get_command_fn(&game),
+            response_fn: GameMapper::get_response_fn(&game),
 
             line_editor: Reedline::create(),
             prompt: RCONPrompt::create(ip),
         };
 
-        //had to do this dumb stuff to get rust to stop complaining at me for some reason. might have just been a formatting mistake trying to do
-        //it inline in the structure
-
-        //Using the example highlighter is fine for now. Implementing custom highlighters to match the command systems of games
-        //would be a lot of work for an admittably cool result, but for now its not going to be done.
-        let mut highlighter =
-            ExampleHighlighter::new(game_mapper::GameMapper::<Game, Res>::get_commands());
+        let mut highlighter = ExampleHighlighter::new((shell.command_fn)());
         highlighter.change_colors(
             nu_ansi_term::Color::Green,
             nu_ansi_term::Color::White,
@@ -84,8 +73,7 @@ where
     }
 
     fn print_command_response(&mut self, res: String) -> std::io::Result<()> {
-        let res_type = MinecraftResponse::from_response_str(&res);
-        let response_lines = res_type.get_output(res.clone());
+        let response_lines = (self.response_fn)(&res);
         for line in response_lines {
             let line_with_newline: String = line.0 + "\n";
             execute!(

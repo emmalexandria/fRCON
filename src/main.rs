@@ -1,14 +1,11 @@
 use crossterm::style::{ContentStyle, StyledContent, Stylize};
-use game_mapper::{Game, GameMapper};
+use games::Game;
 use std::{str::FromStr, thread::sleep, time::Duration};
 
 use argh::FromArgs;
 use shell::RCONShell;
 
-use crate::minecraft::responses::MinecraftResponse;
-
-mod game_mapper;
-mod minecraft;
+mod games;
 mod rcon;
 mod shell;
 
@@ -35,9 +32,9 @@ struct Args {
         option,
         description = "enables game specific prompt features (minecraft, rust, factorio, source)",
         short = 'g',
-        default = "Game::from_str(\"minecraft\").unwrap()"
+        default = "Game::from_str(\"generic\").unwrap()"
     )]
-    game: game_mapper::Game,
+    game: games::Game,
 
     #[argh(
         positional,
@@ -106,14 +103,7 @@ async fn main() {
     }
 
     println!("Creating a {} prompt.", args.game);
-    let shell;
-    match args.game {
-        Game::MINECRAFT => {
-            shell =
-                RCONShell::<minecraft::Minecraft, MinecraftResponse>::new(&mut rcon, args.address);
-        }
-        _ => {}
-    }
+    let mut shell = RCONShell::new(&mut rcon, args.game, args.address);
 
     match shell.run().await {
         Err(e) => {

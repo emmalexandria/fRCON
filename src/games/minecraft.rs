@@ -2,10 +2,16 @@ use std::slice::Iter;
 
 use crossterm::style::{Attribute, ContentStyle, Stylize};
 
-use crate::game_mapper::Response;
+use crate::games::Response;
+pub struct Minecraft;
 
-//I'm really not sure if this is a clever or dumb way to handle the task of formatting arbitrary responses from a short identifying string
-//I wrote this with the intention of avoiding having named functions referring to specific responses.
+impl Minecraft {
+    const COMMANDS: [&'static str; 4] = ["give", "locate", "kill", "summon"];
+
+    pub fn get_commands() -> Vec<String> {
+        return Self::COMMANDS.map(|s| return s.to_string()).to_vec();
+    }
+}
 
 #[derive(Clone)]
 pub enum MinecraftResponse {
@@ -69,9 +75,10 @@ impl Response<MinecraftResponse> for MinecraftResponse {
     }
 
     //Huge match statement which contains the formatting for all the responses we want to modify formatting for.
-    fn get_output(&self, response: String) -> Vec<(String, ContentStyle)> {
-        let id_str = MinecraftResponse::get_id_string(&self);
-        match self {
+    fn get_output(response: &str) -> Vec<(String, ContentStyle)> {
+        let res_type = Self::from_response_str(&response);
+        let id_str = MinecraftResponse::get_id_string(&res_type);
+        match res_type {
             MinecraftResponse::UnknownCommand => {
                 let mut response_lines = Vec::<(String, ContentStyle)>::new();
 
@@ -105,7 +112,7 @@ impl Response<MinecraftResponse> for MinecraftResponse {
                 return lines;
             }
             MinecraftResponse::PlayerNotFound => {
-                return vec![(response, ContentStyle::new().red())]
+                return vec![(response.to_string(), ContentStyle::new().red())]
             }
             MinecraftResponse::UnknownItem => {
                 let mut lines = Vec::<(String, ContentStyle)>::new();
@@ -152,7 +159,9 @@ impl Response<MinecraftResponse> for MinecraftResponse {
 
                 return lines;
             }
-            MinecraftResponse::NoElement => return vec![(response, ContentStyle::new().red())],
+            MinecraftResponse::NoElement => {
+                return vec![(response.to_string(), ContentStyle::new().red())]
+            }
             MinecraftResponse::ExpectedInteger => {
                 let mut lines = Vec::<(String, ContentStyle)>::new();
 
@@ -162,7 +171,7 @@ impl Response<MinecraftResponse> for MinecraftResponse {
 
                 return lines;
             }
-            _ => return vec![(response, ContentStyle::new().white())],
+            _ => return vec![(response.to_string(), ContentStyle::new().white())],
         }
     }
 }
