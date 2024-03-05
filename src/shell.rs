@@ -10,13 +10,11 @@ use reedline::{ExampleHighlighter, Prompt, PromptEditMode, PromptHistorySearch, 
 
 pub struct RCONShell<'a> {
     conn: &'a mut RCONConnection,
-    //Held reference to stdout to flush once per loop
     stdout: io::Stdout,
 
     command_fn: &'a dyn Fn() -> Vec<String>,
     response_fn: &'a dyn Fn(&str) -> Vec<(String, ContentStyle)>,
 
-    //Used for generating a fancy little prelude to the prompt
     line_editor: Reedline,
     prompt: RCONPrompt,
 }

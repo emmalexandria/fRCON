@@ -206,10 +206,7 @@ impl Response<MinecraftResponse> for MinecraftResponse {
             }
             MinecraftResponse::ListPlayers => {
                 let mut lines = Vec::<(String, ContentStyle)>::new();
-
                 let sections = response.split_once(":").unwrap();
-                //List or banlist with player case
-
                 lines.push((sections.0.to_string(), ContentStyle::new().bold()));
 
                 if sections.1.trim().len() > 0 {
@@ -302,7 +299,6 @@ impl Response<MinecraftResponse> for MinecraftResponse {
             MinecraftResponse::InvalidInteger => {
                 let mut lines = Vec::<(String, ContentStyle)>::new();
 
-                //this command is tricky to parse. There's no real clear delimiter string besides the command truncation ellipsis
                 let sections = response.split_inclusive("'");
                 for (i, section) in sections.enumerate() {
                     if i == 0 {
