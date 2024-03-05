@@ -110,8 +110,7 @@ pub enum MinecraftResponse {
     InvalidInteger,
     NoElement,
     ExpectedInteger,
-    //TO BE IMPLEMENTED
-    //IntegerMin (integer less than 0)
+    IntegerMin,
     Default,
 }
 
@@ -125,11 +124,10 @@ impl Response<MinecraftResponse> for MinecraftResponse {
             }
             MinecraftResponse::PlayerNotFound => "No player was found",
             //Handles both the list and banlist case, as their syntax is very similar
-            MinecraftResponse::ListPlayers => {
-                r"There are (\d{1,4}) of a max of (\d{1,4}) players online"
-            }
+            MinecraftResponse::ListPlayers => r"There are (\d+) of a max of (\d+}) players online",
+            MinecraftResponse::IntegerMin => r"Integer must not be less than 1, found -(\d+)",
             MinecraftResponse::Help => "/",
-            MinecraftResponse::ListBans => r"There are (\d{1,4}) ban\(s\)",
+            MinecraftResponse::ListBans => r"There are (\d+}) ban\(s\)",
             MinecraftResponse::IncorrectArg => "Incorrect argument for command",
             MinecraftResponse::UnknownItem => "Unknown item '",
             MinecraftResponse::InvalidInteger => "Invalid integer '",
@@ -151,6 +149,7 @@ impl Response<MinecraftResponse> for MinecraftResponse {
             MinecraftResponse::IncorrectArg,
             MinecraftResponse::UnknownItem,
             MinecraftResponse::InvalidInteger,
+            MinecraftResponse::IntegerMin,
             MinecraftResponse::NoElement,
             MinecraftResponse::ExpectedInteger,
         ]
@@ -276,6 +275,26 @@ impl Response<MinecraftResponse> for MinecraftResponse {
                                 .attribute(Attribute::NoUnderline),
                         ));
                     }
+                }
+
+                return lines;
+            }
+            MinecraftResponse::IntegerMin => {
+                let regex = Regex::new(id_str).unwrap();
+                let mut lines = Vec::<(String, ContentStyle)>::new();
+
+                if let Some(captures) = regex.captures(response) {
+                    let g1 = captures.get(1).unwrap();
+                    let sections = response.split_at(g1.end());
+
+                    lines.push((sections.0.to_string(), ContentStyle::new().red().bold()));
+                    lines.push((
+                        sections.1.to_string(),
+                        ContentStyle::new()
+                            .attribute(Attribute::NoBold)
+                            .attribute(Attribute::NoUnderline)
+                            .red(),
+                    ));
                 }
 
                 return lines;
