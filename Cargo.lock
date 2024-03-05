@@ -318,6 +318,7 @@ dependencies = [
  "chrono",
  "colored",
  "crossterm",
+ "nu-ansi-term",
  "reedline",
  "serde",
  "tokio",

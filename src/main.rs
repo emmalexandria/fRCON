@@ -1,12 +1,12 @@
 use crossterm::style::{ContentStyle, StyledContent, Stylize};
-use std::{thread::sleep, time::Duration};
+use games::Game;
+use std::{str::FromStr, thread::sleep, time::Duration};
 
 use argh::FromArgs;
 use shell::RCONShell;
 
-mod minecraft;
+mod games;
 mod rcon;
-mod response;
 mod shell;
 
 const VERSION: &str = "1.0.0";
@@ -27,6 +27,14 @@ struct Args {
 
     #[argh(option, description = "RCON password", short = 'P')]
     password: String,
+
+    #[argh(
+        option,
+        description = "enables game specific prompt features (minecraft, rust, factorio, source)",
+        short = 'g',
+        default = "Game::from_str(\"generic\").unwrap()"
+    )]
+    game: games::Game,
 
     #[argh(
         positional,
@@ -61,6 +69,7 @@ async fn main() {
         std::process::exit(0);
     }
 
+    // Used as an ID for the RCON protocol
     let pid = std::process::id();
 
     let mut rcon = rcon::RCONConnection::new(&args.address, args.port, pid as i32)
@@ -93,7 +102,8 @@ async fn main() {
         std::process::exit(0);
     }
 
-    let mut shell = RCONShell::new(&mut rcon, args.address);
+    println!("Creating a {} prompt.", args.game);
+    let mut shell = RCONShell::new(&mut rcon, args.game, args.address);
 
     match shell.run().await {
         Err(e) => {

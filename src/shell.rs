@@ -3,16 +3,18 @@ use crossterm::style::{Attribute, Color, ContentStyle, SetStyle, Stylize};
 use std::borrow::Cow;
 use std::io::{self, Write};
 
-use crate::minecraft::responses::MinecraftResponse;
+use crate::games::{Game, GameMapper};
 use crate::rcon::RCONConnection;
-use crate::response::Response;
 
-use reedline::{Prompt, PromptEditMode, PromptHistorySearch, Reedline, Signal};
+use reedline::{ExampleHighlighter, Prompt, PromptEditMode, PromptHistorySearch, Reedline, Signal};
 
 pub struct RCONShell<'a> {
     conn: &'a mut RCONConnection,
     //Held reference to stdout to flush once per loop
     stdout: io::Stdout,
+
+    command_fn: &'a dyn Fn() -> Vec<String>,
+    response_fn: &'a dyn Fn(&str) -> Vec<(String, ContentStyle)>,
 
     //Used for generating a fancy little prelude to the prompt
     line_editor: Reedline,
@@ -20,17 +22,31 @@ pub struct RCONShell<'a> {
 }
 
 impl RCONShell<'_> {
-    pub fn new(conn: &mut RCONConnection, ip: String) -> RCONShell {
-        RCONShell {
+    pub fn new(conn: &mut RCONConnection, game: Game, ip: String) -> RCONShell {
+        let mut shell = RCONShell {
             conn,
             stdout: io::stdout(),
+            command_fn: GameMapper::get_command_fn(&game),
+            response_fn: GameMapper::get_response_fn(&game),
+
             line_editor: Reedline::create(),
             prompt: RCONPrompt::create(ip),
-        }
+        };
+
+        let mut highlighter = ExampleHighlighter::new((shell.command_fn)());
+        highlighter.change_colors(
+            nu_ansi_term::Color::Green,
+            nu_ansi_term::Color::White,
+            nu_ansi_term::Color::White,
+        );
+
+        shell.line_editor = Reedline::create().with_highlighter(Box::new(highlighter));
+
+        return shell;
     }
 
     pub async fn run(&mut self) -> io::Result<()> {
-        println!("{}", "\nCTRL+C or CTRL+D to quit. \n");
+        println!("{}", "\nCTRL+C or CTRL+D to quit.");
 
         self.shell_loop().await?;
         Ok(())
@@ -42,6 +58,7 @@ impl RCONShell<'_> {
 
             match sig {
                 Ok(Signal::Success(buffer)) => {
+                    if buffer == "quit" {}
                     let res = self.conn.send_command(&buffer).await?;
                     self.print_command_response(res)?;
                 }
@@ -57,8 +74,7 @@ impl RCONShell<'_> {
     }
 
     fn print_command_response(&mut self, res: String) -> std::io::Result<()> {
-        let res_type = MinecraftResponse::get_from_response_str(&res);
-        let response_lines = res_type.get_output(res.clone());
+        let response_lines = (self.response_fn)(&res);
         for line in response_lines {
             let line_with_newline: String = line.0 + "\n";
             execute!(
@@ -121,11 +137,11 @@ impl Prompt for RCONPrompt {
     }
 
     fn get_prompt_color(&self) -> Color {
-        Color::DarkGreen
+        Color::Green
     }
 
     fn get_indicator_color(&self) -> Color {
-        Color::Green
+        Color::White
     }
 
     fn right_prompt_on_last_line(&self) -> bool {
