@@ -35,7 +35,7 @@ impl RCONShell<'_> {
 
         let mut highlighter = ExampleHighlighter::new((shell.command_fn)());
         highlighter.change_colors(
-            nu_ansi_term::Color::Green,
+            nu_ansi_term::Color::LightYellow,
             nu_ansi_term::Color::White,
             nu_ansi_term::Color::White,
         );
