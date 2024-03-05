@@ -115,12 +115,9 @@ async fn main() {
 }
 
 fn print_version() {
-    let v_string = StyledContent::new(
-        ContentStyle::new().bold(),
-        "mcrscon v".to_string() + VERSION,
-    );
+    let v_string = StyledContent::new(ContentStyle::new().bold(), "fRCON v".to_string() + VERSION);
     println!("{}", v_string);
-    println!("──────────────");
+    println!("────────────");
     println!("Licensed under MIT");
 }
 

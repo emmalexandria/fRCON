@@ -106,6 +106,7 @@ pub enum MinecraftResponse {
     ListPlayers,
     ListBans,
     UnknownItem,
+    IncorrectArg,
     InvalidInteger,
     NoElement,
     ExpectedInteger,
@@ -129,6 +130,7 @@ impl Response<MinecraftResponse> for MinecraftResponse {
             }
             MinecraftResponse::Help => "/",
             MinecraftResponse::ListBans => r"There are (\d{1,4}) ban\(s\)",
+            MinecraftResponse::IncorrectArg => "Incorrect argument for command",
             MinecraftResponse::UnknownItem => "Unknown item '",
             MinecraftResponse::InvalidInteger => "Invalid integer '",
             MinecraftResponse::NoElement => "Can't find element '",
@@ -146,6 +148,7 @@ impl Response<MinecraftResponse> for MinecraftResponse {
             MinecraftResponse::ListPlayers,
             MinecraftResponse::ListBans,
             MinecraftResponse::Help,
+            MinecraftResponse::IncorrectArg,
             MinecraftResponse::UnknownItem,
             MinecraftResponse::InvalidInteger,
             MinecraftResponse::NoElement,
@@ -173,6 +176,21 @@ impl Response<MinecraftResponse> for MinecraftResponse {
         let id_str = MinecraftResponse::get_id_string(&res_type);
         match res_type {
             MinecraftResponse::UnknownCommand => {
+                let mut response_lines = Vec::<(String, ContentStyle)>::new();
+
+                let sections = response.split_at(id_str.len());
+                response_lines.push((sections.0.to_string(), ContentStyle::new().red().bold()));
+                response_lines.push((
+                    sections.1.to_string(),
+                    ContentStyle::new()
+                        .red()
+                        .attribute(Attribute::NoBold)
+                        .attribute(Attribute::NoUnderline),
+                ));
+
+                return response_lines;
+            }
+            MinecraftResponse::IncorrectArg => {
                 let mut response_lines = Vec::<(String, ContentStyle)>::new();
 
                 let sections = response.split_at(id_str.len());
