@@ -5,6 +5,7 @@ use std::{str::FromStr, thread::sleep, time::Duration};
 use argh::FromArgs;
 use shell::RCONShell;
 
+mod commands;
 mod games;
 mod highlighter;
 mod rcon;
