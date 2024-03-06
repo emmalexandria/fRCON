@@ -4,6 +4,7 @@ use reedline::{Highlighter, StyledText};
 pub struct RCONHighlighter {
     commands: Vec<String>,
     command_style: Style,
+    hint_style: Style,
     neutral_style: Style,
     nomatch_style: Style,
 }
@@ -46,8 +47,9 @@ impl RCONHighlighter {
         RCONHighlighter {
             commands,
             command_style: Style::new().fg(Color::LightYellow),
+            hint_style: Style::new().fg(Color::LightGray),
             neutral_style: Style::new().fg(Color::DarkGray),
-            nomatch_style: Style::new().fg(Color::DarkGray),
+            nomatch_style: Style::new().fg(Color::Red),
         }
     }
 }
