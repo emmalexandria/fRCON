@@ -6,6 +6,7 @@ use argh::FromArgs;
 use shell::RCONShell;
 
 mod games;
+mod highlighter;
 mod rcon;
 mod shell;
 

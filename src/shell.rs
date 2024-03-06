@@ -4,6 +4,7 @@ use std::borrow::Cow;
 use std::io::{self, Write};
 
 use crate::games::{Game, GameMapper};
+use crate::highlighter::RCONHighlighter;
 use crate::rcon::RCONConnection;
 
 use reedline::{ExampleHighlighter, Prompt, PromptEditMode, PromptHistorySearch, Reedline, Signal};
@@ -31,12 +32,9 @@ impl RCONShell<'_> {
             prompt: RCONPrompt::create(ip),
         };
 
-        let mut highlighter = ExampleHighlighter::new((shell.command_fn)());
-        highlighter.change_colors(
-            nu_ansi_term::Color::LightYellow,
-            nu_ansi_term::Color::White,
-            nu_ansi_term::Color::White,
-        );
+        let commands = (shell.command_fn)();
+
+        let highlighter = RCONHighlighter::new(commands);
 
         shell.line_editor = Reedline::create().with_highlighter(Box::new(highlighter));
 
