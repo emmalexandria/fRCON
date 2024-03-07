@@ -10,7 +10,7 @@ mod highlighter;
 mod rcon;
 mod shell;
 
-const VERSION: &str = "1.0.0";
+const VERSION: &str = "1.2.0";
 
 #[derive(FromArgs)]
 #[argh(description = "Minecraft RCON Implementation for Rust")]
