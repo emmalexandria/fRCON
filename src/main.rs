@@ -73,15 +73,27 @@ async fn main() {
     // Used as an ID for the RCON protocol
     let pid = std::process::id();
 
-    let mut rcon = rcon::RCONConnection::new(&args.address, args.port, pid as i32)
-        .await
-        .unwrap();
-    print_if_not_silent("Connected to RCON.".white(), &args);
+    let mut rcon;
+
+    match rcon::RCONConnection::new(&args.address, args.port, pid as i32).await {
+        Ok(r) => {
+            print_if_not_silent("Connected to RCON.".white(), &args);
+            rcon = r
+        }
+        Err(e) => {
+            print_if_not_silent("Failed to connect to server. Is it online?".red(), &args);
+            std::process::exit(1);
+        }
+    }
+
     match rcon.auth(&args.password).await {
         Ok(_) => {
             print_if_not_silent("Logged in.".white(), &args);
         }
-        Err(_) => print_if_not_silent("Failed to log in.".red(), &args),
+        Err(_) => {
+            print_if_not_silent("Failed to log in.".red(), &args);
+            std::process::exit(1);
+        }
     }
 
     if args.commands.len() > 0 {
