@@ -36,7 +36,7 @@ impl RCONHighlighter {
             commands,
             is_generic: game == Game::GENERIC,
             command_style: Style::new().fg(Color::LightYellow),
-            neutral_style: Style::new().fg(Color::DarkGray),
+            neutral_style: Style::new().fg(Color::LightGray),
             nomatch_style: Style::new().fg(Color::Red),
         }
     }
