@@ -7,7 +7,7 @@ use crate::games::{Game, GameMapper};
 use crate::highlighter::RCONHighlighter;
 use crate::rcon::RCONConnection;
 
-use reedline::{ExampleHighlighter, Prompt, PromptEditMode, PromptHistorySearch, Reedline, Signal};
+use reedline::{Prompt, PromptEditMode, PromptHistorySearch, Reedline, Signal};
 
 pub struct RCONShell<'a> {
     conn: &'a mut RCONConnection,
