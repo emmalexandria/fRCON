@@ -1,8 +1,11 @@
 use nu_ansi_term::{Color, Style};
 use reedline::{Highlighter, StyledText};
 
+use crate::games::Game;
+
 pub struct RCONHighlighter {
     commands: Vec<String>,
+    is_generic: bool,
     command_style: Style,
     neutral_style: Style,
     nomatch_style: Style,
@@ -16,7 +19,7 @@ impl Highlighter for RCONHighlighter {
         for (i, word) in words.iter().enumerate() {
             if self.commands.contains(&word.trim().to_string()) && i == 0 {
                 styled_text.push((self.command_style, word.to_string()));
-            } else if i == 0 {
+            } else if i == 0 && !self.is_generic {
                 styled_text.push((self.nomatch_style, word.to_string()));
             } else {
                 styled_text.push((self.neutral_style, word.to_string()));
@@ -28,9 +31,10 @@ impl Highlighter for RCONHighlighter {
 }
 
 impl RCONHighlighter {
-    pub fn new(commands: Vec<String>) -> RCONHighlighter {
+    pub fn new(commands: Vec<String>, game: Game) -> RCONHighlighter {
         RCONHighlighter {
             commands,
+            is_generic: game == Game::GENERIC,
             command_style: Style::new().fg(Color::LightYellow),
             neutral_style: Style::new().fg(Color::DarkGray),
             nomatch_style: Style::new().fg(Color::Red),

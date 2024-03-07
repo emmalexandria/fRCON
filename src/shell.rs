@@ -34,7 +34,7 @@ impl RCONShell<'_> {
             stdout: io::stdout(),
             command_fn,
             response_fn,
-            line_editor: Self::create_reedline((command_fn)()),
+            line_editor: Self::create_reedline((command_fn)(), game),
             prompt: RCONPrompt::create(ip),
         }
     }
@@ -66,8 +66,8 @@ impl RCONShell<'_> {
         Ok(())
     }
 
-    fn create_reedline(commands: Vec<String>) -> Reedline {
-        let highlighter = RCONHighlighter::new(commands.clone());
+    fn create_reedline(commands: Vec<String>, game: Game) -> Reedline {
+        let highlighter = RCONHighlighter::new(commands.clone(), game);
         let completer = DefaultCompleter::new_with_wordlen(commands, 1);
         let completion_menu = Box::new(
             ColumnarMenu::default()

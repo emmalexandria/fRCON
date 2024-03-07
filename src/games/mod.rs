@@ -12,7 +12,7 @@ use minecraft::{Minecraft, MinecraftResponse};
 use self::generic::Generic;
 
 ///Game selection enum. Used in GameMapper and for command line arguments.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum Game {
     MINECRAFT,
     GENERIC,
