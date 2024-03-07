@@ -1,6 +1,5 @@
 use nu_ansi_term::{Color, Style};
 use reedline::{Highlighter, StyledText};
-use tokio::io::split;
 
 pub struct RCONHighlighter {
     commands: Vec<String>,

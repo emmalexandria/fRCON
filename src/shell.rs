@@ -1,5 +1,6 @@
 use crossterm::execute;
-use crossterm::style::{Attribute, Color, ContentStyle, SetStyle, Stylize};
+use crossterm::style::{Attribute, ContentStyle, SetStyle, Stylize};
+use nu_ansi_term::Style;
 use std::borrow::Cow;
 use std::io::{self, Write};
 
@@ -7,7 +8,11 @@ use crate::games::{Game, GameMapper};
 use crate::highlighter::RCONHighlighter;
 use crate::rcon::RCONConnection;
 
-use reedline::{Prompt, PromptEditMode, PromptHistorySearch, Reedline, Signal};
+use reedline::{
+    default_emacs_keybindings, ColumnarMenu, DefaultCompleter, Emacs, KeyCode, KeyModifiers,
+    MenuBuilder, Prompt, PromptEditMode, PromptHistorySearch, Reedline, ReedlineEvent,
+    ReedlineMenu, Signal,
+};
 
 pub struct RCONShell<'a> {
     conn: &'a mut RCONConnection,
@@ -22,23 +27,16 @@ pub struct RCONShell<'a> {
 
 impl RCONShell<'_> {
     pub fn new(conn: &mut RCONConnection, game: Game, ip: String) -> RCONShell {
-        let mut shell = RCONShell {
+        let command_fn = GameMapper::get_command_fn(&game);
+        let response_fn = GameMapper::get_response_fn(&game);
+        RCONShell {
             conn,
             stdout: io::stdout(),
-            command_fn: GameMapper::get_command_fn(&game),
-            response_fn: GameMapper::get_response_fn(&game),
-
-            line_editor: Reedline::create(),
+            command_fn,
+            response_fn,
+            line_editor: Self::create_reedline((command_fn)()),
             prompt: RCONPrompt::create(ip),
-        };
-
-        let commands = (shell.command_fn)();
-
-        let highlighter = RCONHighlighter::new(commands);
-
-        shell.line_editor = Reedline::create().with_highlighter(Box::new(highlighter));
-
-        return shell;
+        }
     }
 
     pub async fn run(&mut self) -> io::Result<()> {
@@ -66,6 +64,36 @@ impl RCONShell<'_> {
         }
 
         Ok(())
+    }
+
+    fn create_reedline(commands: Vec<String>) -> Reedline {
+        let highlighter = RCONHighlighter::new(commands.clone());
+        let completer = DefaultCompleter::new_with_wordlen(commands, 1);
+        let completion_menu = Box::new(
+            ColumnarMenu::default()
+                .with_name("completion_menu")
+                .with_selected_text_style(Style::new())
+                .with_selected_match_text_style(Style::new().reverse().underline())
+                .with_marker(" |>"),
+        );
+
+        let mut keybindings = default_emacs_keybindings();
+        keybindings.add_binding(
+            KeyModifiers::NONE,
+            KeyCode::Tab,
+            ReedlineEvent::UntilFound(vec![
+                ReedlineEvent::Menu("completion_menu".to_string()),
+                ReedlineEvent::MenuNext,
+            ]),
+        );
+
+        let edit_mode = Box::new(Emacs::new(keybindings));
+
+        Reedline::create()
+            .with_highlighter(Box::new(highlighter))
+            .with_edit_mode(edit_mode)
+            .with_completer(Box::new(completer))
+            .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
     }
 
     fn print_command_response(&mut self, res: String) -> std::io::Result<()> {
@@ -127,16 +155,16 @@ impl Prompt for RCONPrompt {
         return Cow::Borrowed("");
     }
 
-    fn get_prompt_right_color(&self) -> Color {
-        Color::White
+    fn get_prompt_right_color(&self) -> reedline::Color {
+        reedline::Color::White
     }
 
-    fn get_prompt_color(&self) -> Color {
-        Color::Green
+    fn get_prompt_color(&self) -> reedline::Color {
+        reedline::Color::Green
     }
 
-    fn get_indicator_color(&self) -> Color {
-        Color::White
+    fn get_indicator_color(&self) -> reedline::Color {
+        reedline::Color::White
     }
 
     fn right_prompt_on_last_line(&self) -> bool {
