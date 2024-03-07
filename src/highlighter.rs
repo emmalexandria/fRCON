@@ -5,7 +5,6 @@ use tokio::io::split;
 pub struct RCONHighlighter {
     commands: Vec<String>,
     command_style: Style,
-    hint_style: Style,
     neutral_style: Style,
     nomatch_style: Style,
 }
@@ -18,6 +17,8 @@ impl Highlighter for RCONHighlighter {
         for (i, word) in words.iter().enumerate() {
             if self.commands.contains(&word.trim().to_string()) && i == 0 {
                 styled_text.push((self.command_style, word.to_string()));
+            } else if i == 0 {
+                styled_text.push((self.nomatch_style, word.to_string()));
             } else {
                 styled_text.push((self.neutral_style, word.to_string()));
             }
@@ -32,7 +33,6 @@ impl RCONHighlighter {
         RCONHighlighter {
             commands,
             command_style: Style::new().fg(Color::LightYellow),
-            hint_style: Style::new().fg(Color::LightGray),
             neutral_style: Style::new().fg(Color::DarkGray),
             nomatch_style: Style::new().fg(Color::Red),
         }
